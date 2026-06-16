@@ -1,4 +1,4 @@
-name: J7 Prime 2 (64-bit) PixelOS Otomatik ROM Derleyici
+name: J7 Prime 2 (64-bit) PixelOS Android 16 ROM Derleyici
 
 on:
   workflow_dispatch:
@@ -13,8 +13,8 @@ jobs:
     - name: Sunucu Disk Alanını Maksimum Seviyede Boşalt (Ultra Temizlik)
       run: |
         docker rmi $(docker images -q) || true
-        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc /usr/local/share/boost /usr/share/swift /usr/local/graalvm /usr/local/share/powershell
-        sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' google-chrome-stable firefox powershell mono-devel
+        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc /usr/local/share/boost /usr/share/swift /usr/local/graalvm /usr/local/share/powershell /usr/local/lib/node_modules
+        sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' google-chrome-stable firefox powershell mono-devel azure-cli netbeans*
         sudo apt-get autoremove -y
         sudo apt-get clean
         df -h
@@ -22,7 +22,7 @@ jobs:
     - name: Derleme İçin Gerekli Sistem Paketlerini Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3
+        sudo apt-get install -y bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3
 
     - name: Google Repo Aracını Kur ve Yapılandır
       run: |
@@ -33,27 +33,26 @@ jobs:
         git config --global user.name "PixelOSBuilder"
         git config --global user.email "pixelos@build.local"
 
-    - name: PixelOS Kaynak Kodlarını ve J7 Prime 2 64-bit Ağaçlarını İndir
+    - name: PixelOS Android 16 Kodlarını ve Ağaçları İndir
       run: |
         mkdir pixelos
         cd pixelos
         
-        # Sığ indirme yapılandırması
-        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen --git-lfs --depth=1
+        # Sürüm Android 16 (sixteen) olarak güncellendi
+        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b sixteen --git-lfs --depth=1
         
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/g611f.xml
         <?xml version="1.0" encoding="UTF-8"?>
         <manifest>
-          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github" revision="fourteen" />
-          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github" revision="fourteen" />
-          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github" revision="fourteen" />
-          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github" revision="fourteen" />
+          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github" revision="sixteen" />
+          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github" revision="sixteen" />
+          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github" revision="sixteen" />
+          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github" revision="sixteen" />
         </manifest>
         EOF
 
-        # Disk alanından tasarruf etmek için ekstra filtreler eklendi
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch --prune
+        repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune
 
     - name: PixelOS Kurulumunu Başlat ve Flaşlanabilir Zip Üret
       run: |
@@ -65,6 +64,6 @@ jobs:
     - name: Oluşan Hazır ZIP Dosyasını İndirme Linki Yap
       uses: actions/upload-artifact@v4
       with:
-        name: PixelOS-G611F-64bit-Flashable-ROM
+        name: PixelOS-Android16-G611F-Flashable-ROM
         path: pixelos/out/target/product/g611f/PixelOS_*.zip
         
