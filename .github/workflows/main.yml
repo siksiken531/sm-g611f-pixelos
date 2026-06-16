@@ -1,4 +1,4 @@
-name: J7 Prime 2 (64-bit) PixelOS Android 16 ROM Derleyici
+name: J7 Prime 2 (64-bit) PixelOS Otomatik ROM Derleyici
 
 on:
   workflow_dispatch:
@@ -33,25 +33,29 @@ jobs:
         git config --global user.name "PixelOSBuilder"
         git config --global user.email "pixelos@build.local"
 
-    - name: PixelOS Android 16 Kodlarını ve Ağaçları İndir
+    - name: PixelOS Kaynak Kodlarını (Ultra Sıkıştırılmış) ve Ağaçları İndir
       run: |
         mkdir pixelos
         cd pixelos
         
-        # Sürüm Android 16 (sixteen) olarak güncellendi
-        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b sixteen --git-lfs --depth=1
+        # Kesinlikle alan hatası vermemesi için gereksiz tüm paketleri (-darwin, -mips vb.) engelliyoruz
+        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen -g default,-notdefault,-darwin,-mips,-x86 --git-lfs --depth=1
         
+        # Adres hatasını çözen eksiksiz manifest yapısı
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/g611f.xml
         <?xml version="1.0" encoding="UTF-8"?>
         <manifest>
-          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github" revision="sixteen" />
-          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github" revision="sixteen" />
-          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github" revision="sixteen" />
-          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github" revision="sixteen" />
+          <remote name="github-j7" fetch="https://github.com/" />
+          
+          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" revision="fourteen" />
+          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" revision="fourteen" />
+          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" revision="fourteen" />
+          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" revision="fourteen" />
         </manifest>
         EOF
 
+        # Disk alanını koruyarak güvenli indirme
         repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune
 
     - name: PixelOS Kurulumunu Başlat ve Flaşlanabilir Zip Üret
@@ -64,6 +68,6 @@ jobs:
     - name: Oluşan Hazır ZIP Dosyasını İndirme Linki Yap
       uses: actions/upload-artifact@v4
       with:
-        name: PixelOS-Android16-G611F-Flashable-ROM
+        name: PixelOS-G611F-Flashable-ROM
         path: pixelos/out/target/product/g611f/PixelOS_*.zip
         
