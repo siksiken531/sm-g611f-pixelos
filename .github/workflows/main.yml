@@ -10,10 +10,12 @@ jobs:
     - name: Depoyu Kontrol Et
       uses: actions/checkout@v4
 
-    - name: Sunucu Disk Alanını Boşalt
+    - name: Sunucu Disk Alanını Maksimum Seviyede Boşalt (Ultra Temizlik)
       run: |
         docker rmi $(docker images -q) || true
-        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc /usr/local/share/boost
+        sudo rm -rf /usr/share/dotnet /etc/mysql /etc/php /usr/local/lib/android /opt/ghc /usr/local/share/boost /usr/share/swift /usr/local/graalvm /usr/local/share/powershell
+        sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' 'php.*' google-chrome-stable firefox powershell mono-devel
+        sudo apt-get autoremove -y
         sudo apt-get clean
         df -h
 
@@ -36,6 +38,7 @@ jobs:
         mkdir pixelos
         cd pixelos
         
+        # Sığ indirme yapılandırması
         repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen --git-lfs --depth=1
         
         mkdir -p .repo/local_manifests
@@ -49,7 +52,8 @@ jobs:
         </manifest>
         EOF
 
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
+        # Disk alanından tasarruf etmek için ekstra filtreler eklendi
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch --prune
 
     - name: PixelOS Kurulumunu Başlat ve Flaşlanabilir Zip Üret
       run: |
