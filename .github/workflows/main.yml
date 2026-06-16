@@ -38,16 +38,15 @@ jobs:
         mkdir pixelos
         cd pixelos
         
-        # Kesinlikle alan hatası vermemesi için gereksiz tüm paketleri (-darwin, -mips vb.) engelliyoruz
+        # Manifesti alıyoruz
         repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen -g default,-notdefault,-darwin,-mips,-x86 --git-lfs --depth=1
         
-        # Adres hatasını çözen eksiksiz manifest yapısı
+        # Manifest dosyalarımızı oluşturuyoruz
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/g611f.xml
         <?xml version="1.0" encoding="UTF-8"?>
         <manifest>
           <remote name="github-j7" fetch="https://github.com/" />
-          
           <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" revision="fourteen" />
           <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" revision="fourteen" />
           <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" revision="fourteen" />
@@ -55,8 +54,11 @@ jobs:
         </manifest>
         EOF
 
-        # Disk alanını koruyarak güvenli indirme
-        repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune
+        # Hata durumunda 5 kere otomatik tekrar deneyecek şekilde güçlendirilmiş senkronizasyon
+        for i in {1..5}; do
+          repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune && break || echo "Hata alındı, tekrar deneniyor..."
+          sleep 5
+        done
 
     - name: PixelOS Kurulumunu Başlat ve Flaşlanabilir Zip Üret
       run: |
