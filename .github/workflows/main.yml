@@ -43,7 +43,7 @@ jobs:
         # Ana sistemi PixelOS Fourteen olarak başlatıyoruz
         repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen --git-lfs --depth=1
         
-        # Yerel manifest ile Rust'ı engelliyor ve cihaz ağaçlarının GERÇEK dal adını (lineage-21.0) tanımlıyoruz
+        # Yerel manifest oluşturma - Dal adı (revision) zorunluluğunu kaldırıp ana dalı otomatik çekiyoruz
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/g611f.xml
         <?xml version="1.0" encoding="UTF-8"?>
@@ -53,10 +53,10 @@ jobs:
           <remove-project name="platform/prebuilts/rust" />
           <remove-project name="platform/prebuilts/clang/host/linux-x86" />
           
-          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" revision="lineage-21.0" />
-          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" revision="lineage-21.0" />
-          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" revision="lineage-21.0" />
-          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" revision="lineage-21.0" />
+          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" />
+          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" />
+          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" />
+          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" />
         </manifest>
         EOF
 
@@ -70,7 +70,8 @@ jobs:
       run: |
         cd pixelos
         source build/envsetup.sh
-        lunch pixelos_g611f-userdebug
+        # Güncel PixelOS standartlarına uygun lunch kombinasyonu
+        lunch pixelos_g611f-trunk_staging-userdebug
         mka bacon -j$(nproc --all)
 
     - name: Oluşan Hazır ZIP Dosyasını İndirme Linki Yap
