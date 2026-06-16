@@ -19,7 +19,7 @@ jobs:
         haskell: true
         large-packages: true
         docker-images: true
-        swap: true
+        swap-storage: true
 
     - name: Derleme İçin Gerekli Sistem Paketlerini Kur
       run: |
@@ -40,19 +40,25 @@ jobs:
         mkdir pixelos
         cd pixelos
         
-        # Rust ve lüzumsuz tüm prebuilts paketlerini tamamen engelleyerek alandan devasa tasarruf sağlıyoruz
-        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen -g default,-notdefault,-darwin,-mips,-x86,-rust --git-lfs --depth=1
+        # Manifesti başlatıyoruz
+        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen --git-lfs --depth=1
         
-        # Exynos7870 ekibinin Android 14 tabanlı cihaz ağaçlarının evrensel dal adını (lineage-21.0) tanımlıyoruz
+        # Bizi tıkayan devasa Rust paketini ve gereksiz diğer prebuilts araçlarını local_manifest ile ZORLA sildiriyoruz
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/g611f.xml
         <?xml version="1.0" encoding="UTF-8"?>
         <manifest>
           <remote name="github-j7" fetch="https://github.com/" />
-          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" revision="lineage-21.0" />
-          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" revision="lineage-21.0" />
-          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" revision="lineage-21.0" />
-          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" revision="lineage-21.0" />
+          
+          <!-- Hata veren devasa paketleri engelliyoruz -->
+          <remove-project name="platform/prebuilts/rust" />
+          <remove-project name="platform/prebuilts/clang/host/linux-x86" />
+          
+          <!-- J7 Prime 2 Android 14 Cihaz Ağaçlarımız -->
+          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" revision="fourteen" />
+          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" revision="fourteen" />
+          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" revision="fourteen" />
+          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" revision="fourteen" />
         </manifest>
         EOF
 
