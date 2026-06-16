@@ -1,0 +1,1 @@
+# sm-g611f-pixelos
