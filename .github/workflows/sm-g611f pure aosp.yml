@@ -1,4 +1,4 @@
-name: PixelOS Android 15 Clean Build for SM-G611F
+name: Pure AOSP Android 15 Build for SM-G611F
 
 on:
   workflow_dispatch:
@@ -45,18 +45,20 @@ jobs:
         git config --global user.name "Geliştirici"
         git config --global user.email "developer@example.com"
 
-    # --- SORGULARI VE HATALARI ATLAYAN GÜVENLİ SYNC ADIMI ---
-    - name: PixelOS Android 15 Kaynak Kodunu İndir
+    # --- SAF GOOGLE AOSP ANDROID 15 MANIFEST TANIMLAMASI ---
+    - name: Saf AOSP Android 15 Kaynak Kodunu İndir
       run: |
         mkdir -p android && cd android
-        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fifteen --depth=1 --git-lfs
+        # Google'ın resmi android-15.0.0 ana dalını (main) hedefliyoruz
+        repo init -u https://android.googlesource.com/platform/manifest -b android-15.0.0_r1
         
-        # --force-break ve --ignore-missing-projects ile sorunlu depoları atlayıp devam etmesini sağlıyoruz
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --ignore-missing-projects
+        # Stabil ve temiz senkronizasyon komutu
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
     - name: Cihaz Ağaçlarını Çek
       run: |
         cd android
+        # Senin cihazının ağaçlarını AOSP uyumlu klasörlere çekiyoruz
         git clone https://github.com/AndroidBlobs/device_samsung_on7xreflte.git device/samsung/g611f
         git clone https://github.com/Exynos7870/android_vendor_samsung_on7xelte.git vendor/samsung/g611f
         git clone https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel/samsung/exynos7870
@@ -97,18 +99,21 @@ jobs:
         export CCACHE_EXEC=/usr/bin/ccache
         ccache -M 20G
 
-    - name: ARM64 Derlemeyi 128 Cekirdek Gucuyle Baslat
+    # --- 128 ÇEKİRDEK (THREAD) SIRALAMA SIRRI BURADA ---
+    - name: AOSP ARM64 Derlemeyi 128 Cekirdek Gucuyle Baslat
       run: |
         cd android
         source build/envsetup.sh
         
-        lunch pixelos_g611f-userdebug || lunch aosp_g611f-userdebug || lunch pixelos_on7xreflte-userdebug
+        # Saf AOSP standart lunch kombinasyonlarını deniyoruz
+        lunch aosp_g611f-userdebug || lunch aosp_on7xreflte-userdebug
         
+        # Sistem 128 iş parçacığı sırasıyla işlemciyi sonuna kadar terletiyor
         mka bacon -j128
 
     - name: Üretilen ARM64 ROM Zip Dosyasını GitHub'a Yükle
       uses: actions/upload-artifact@v4
       with:
-        name: PixelOS-Android15-64Bit-SM-G611F
+        name: AOSP-Android15-64Bit-SM-G611F
         path: android/out/target/product/g611f/*.zip
         
