@@ -1,4 +1,4 @@
-name: J7 Prime 2 Full Kernel Build
+name: J7 Prime 2 Kernel Builder
 
 on:
   workflow_dispatch:
@@ -7,27 +7,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Gerekli Paketler
-        run: sudo apt-get update && sudo apt-get install -y bc bison build-essential flex libssl-dev libncurses-dev
-      
-      - name: Kaynak Kodları Klonla
+      - name: Git ayarlarını sıfırla
         run: |
-          # 1. Kernel (Motor)
+          git config --global http.postBuffer 524288000
+          git config --global core.compression 0
+      - name: Klonlama (Stabil)
+        run: |
+          # 404 hatası almamak için HTTPS yerine doğrudan depoyu hedefliyoruz
           git clone --depth=1 https://github.com/universal7870/android_kernel_samsung_exynos7870.git kernel
-          # 2. Device Tree (Bağlantılar) - Senin bulduğun depo
-          git clone --depth=1 https://github.com/AndroidBlobs/device_samsung_on7xreflte.git device_tree
-          # 3. Toolchain
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
-      
-      - name: Derleme Başlat
+          git clone --depth=1 https://github.com/AndroidBlobs/device_samsung_on7xreflte.git device
+      - name: Derleme
         run: |
           cd kernel
           export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
-          # Binder64 Yaması
+          # Binder64 yapılandırması
           sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/# CONFIG_ANDROID_BINDER_IPC_32BIT is not set/' .config
           echo "CONFIG_ANDROID_BINDER64_PROTOCOL=y" >> .config
-          
           make ARCH=arm64 exynos7870-j7refte_defconfig
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
+          make -j$(nproc)
           
