@@ -43,7 +43,7 @@ jobs:
         # Ana sistemi PixelOS Fourteen olarak başlatıyoruz
         repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen --git-lfs --depth=1
         
-        # Yerel manifest oluşturma - Dal adı zorunluluğunu kaldırıp ana dalı otomatik çekiyoruz
+        # Yerel manifest oluşturma - Tag çakışmasını engellemek için upstream ve revision'ı direkt fourteen'e eşitliyoruz
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/g611f.xml
         <?xml version="1.0" encoding="UTF-8"?>
@@ -53,14 +53,14 @@ jobs:
           <remove-project name="platform/prebuilts/rust" />
           <remove-project name="platform/prebuilts/clang/host/linux-x86" />
           
-          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" />
-          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" />
-          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" />
-          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" />
+          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" revision="fourteen" upstream="refs/heads/fourteen" />
+          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" revision="fourteen" upstream="refs/heads/fourteen" />
+          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" revision="fourteen" upstream="refs/heads/fourteen" />
+          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" revision="fourteen" upstream="refs/heads/fourteen" />
         </manifest>
         EOF
 
-        # 15 dakikalık zaman sınırlı, takılmayı engelleyen akıllı indirme döngüsü
+        # Güçlendirilmiş indirme döngüsü
         for i in {1..5}; do
           echo "İndirme denemesi #$i başlatılıyor..."
           timeout 15m repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune && break || echo "Bağlantı koptu veya zaman aşımına uğradı, tekrar deneniyor..."
@@ -71,8 +71,8 @@ jobs:
       run: |
         cd pixelos
         source build/envsetup.sh
-        # Güncel PixelOS standartlarına uygun yeni lunch kombinasyonu
-        lunch pixelos_g611f-trunk_staging-userdebug
+        # Sistem logunda doğrulanan ap2a sürümüyle lunch yapıyoruz
+        lunch pixelos_g611f-ap2a-userdebug
         mka bacon -j$(nproc --all)
 
     - name: Oluşan Hazır ZIP Dosyasını İndirme Linki Yap
