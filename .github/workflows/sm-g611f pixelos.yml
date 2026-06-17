@@ -1,7 +1,7 @@
 name: PixelOS Android 15 (Pure ARM64 Conversion) for SM-G611F
 
 on:
-  workflow_dispatch: # Manuel olarak Actions sekmesinden başlatabilmek için
+  workflow_dispatch:
 
 jobs:
   build:
@@ -11,23 +11,25 @@ jobs:
     - name: Depoyu Al (Checkout)
       uses: actions/checkout@v4
 
-    # GitHub Actions disk sınırını aşmak için gereksiz paketleri silip alanı ~100GB+ üzerine çıkarır
-    - name: Disk Alanını Maksimuma Çıkar
-      uses: easimon/maximize-build-space@master
-      with:
-        root-reserve-mb: 1024
-        swap-size-mb: 10240
-        remove-dotnet: 'true'
-        remove-android: 'true'
-        remove-haskell: 'true'
-        remove-codeql: 'true'
-        remove-docker-images: 'true'
-
-    # Çakışma yaratan eski crossbuild paketleri kaldırıldı, standart AOSP bağımlılıkları eklendi
+    # 1. ADIM: Paketleri disk hâlâ standart düzenindeyken kuruyoruz (Hata vermemesi için)
+    # Çakışma yaratan paketler olmadan temiz kurulum yapılıyor
     - name: Geliştirici Paketlerini Kur
       run: |
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python-is-python3
+
+    # 2. ADIM: Paketler kurulduktan sonra root dizinindeki gereksiz devasa klasörleri elle siliyoruz
+    # Bu yöntem 'No space left on device' hatası vermeden temiz ve güvenli alan açar
+    - name: Manuel Disk Alanı Temizliği Yap
+      run: |
+        sudo rm -rf /usr/share/dotnet
+        sudo rm -rf /usr/local/lib/android
+        sudo rm -rf /opt/ghc
+        sudo rm -rf /usr/share/swift
+        sudo rm -rf /usr/local/share/boost
+        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo docker image prune --all --force
+        df -h
 
     - name: Repo Aracını Kur
       run: |
@@ -44,28 +46,22 @@ jobs:
     - name: PixelOS Android 15 Kaynak Kodunu İndir
       run: |
         mkdir android && cd android
-        # PixelOS Android 15 (fifteen) manifestosu
         repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fifteen --git-lfs
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
     - name: Cihaz Ağaçlarını Çek
       run: |
         cd android
-        # NOT: Buradaki GitHub linklerini kendi kullandığın cihaz ağacı repolarına göre düzenlemelisin!
+        # NOT: Kendi repolarına göre düzenlemeyi unutma!
         git clone https://github.com/Kendi-Depon/android_device_samsung_g611f.git -b android-15 device/samsung/g611f
         git clone https://github.com/Kendi-Depon/android_vendor_samsung_g611f.git -b android-15 vendor/samsung/g611f
         git clone https://github.com/Kendi-Depon/android_kernel_samsung_exynos7870.git -b android-15 kernel/samsung/exynos7870
 
-    # Cihaz ağacını (Device Tree) otomatik olarak 64-bit moduna (ARM64) yamalayan dinamik adım
     - name: Cihaz Ağacını 64-Bit Mimariye Zorla (ARM64 Conversion)
       run: |
         cd android/device/samsung/g611f
-        
-        # Eski 32-bit mimari satırlarını temizle
         sed -i '/TARGET_ARCH/d' BoardConfig.mk
         sed -i '/TARGET_CPU/d' BoardConfig.mk
-        
-        # Saf 64-bit yapılandırmasını ve Binder64 desteğini dosyanın sonuna ekle
         cat <<EOF >> BoardConfig.mk
 
         # --- YAML Tarafından Otomatik Eklenen 64-Bit Yapılandırması ---
@@ -83,10 +79,8 @@ jobs:
         TARGET_USES_64_BIT_BINDER := true
         # -------------------------------------------------------------
         EOF
-        
         echo "BoardConfig.mk 64-bit moduna uyarlandı."
 
-    # Çekirdek (Kernel) derlemesinin arm64 mimarisinde yapılması için çevre değişkenlerini ayarlar
     - name: Kernel Derleyicisini ARM64 Olarak Ayarla
       run: |
         cd android
@@ -103,11 +97,7 @@ jobs:
       run: |
         cd android
         source build/envsetup.sh
-        
-        # Ağacındaki isimlendirmeye göre lunch hedefini seç (Örn: pixelos_g611f-userdebug)
         lunch pixelos_g611f-userdebug
-        
-        # Derlemeyi başlatır ve flash edilebilir zip çıktısı (bacon) üretir
         mka bacon -j$(nproc --all)
 
     - name: Üretilen ARM64 ROM Zip Dosyasını GitHub'a Yükle
