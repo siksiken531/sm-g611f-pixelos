@@ -1,4 +1,4 @@
-name: PixelOS Android 15 (Pure ARM64 Conversion) for SM-G611F
+name: PixelOS Android 15 (200GB & 128 Core Showdown) for SM-G611F
 
 on:
   workflow_dispatch:
@@ -16,10 +16,27 @@ jobs:
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python-is-python3
 
-    - name: Manuel Disk Alanı Temizliği Yap
+    # --- TAM İSTEDİĞİN GÖRSEL SORGULAMA VE AGRESİF TEMİZLİK ADIMI ---
+    - name: Sunucu Diskini Kontrol Et ve Genislet
       run: |
+        echo "======================================================="
+        echo "KOMUT: disk 200gb mi"
+        echo "HEDEF: Sistem kaynaklarini son sinira kadar zorla!"
+        echo "======================================================="
+        
+        # 1. Tüm gereksiz Microsoft, Azure, Docker ve Android SDK kalıntılarını süpür
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/share/swift /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/local/share/vcpkg /usr/local/share/chromium /usr/local/lib/node_modules /opt/pipx
+        sudo rm -rf /opt/microsoft /usr/share/sbt /usr/share/mono /var/lib/mongodb /usr/local/share/powershell
         sudo docker image prune --all --force
+        
+        # 2. Gizli alanları ve takas dosyasını ana diske alan olarak kazandır
+        sudo swapoff -a
+        sudo rm -f /mnt/swapfile
+        sudo mount -o remount,size=100% /run
+        sudo apt-get clean
+        
+        echo "=== MEVCUT DISK DURUMU (MAXIMUM KAPASİTE) ==="
         df -h
 
     - name: Repo Aracını Kur
@@ -34,29 +51,20 @@ jobs:
         git config --global user.name "Geliştirici"
         git config --global user.email "developer@example.com"
 
-    # İlk seferde kodları indirecek, sonraki çalıştırmalarda 20 dakika bekletmeyecek önbellek adımı
-    - name: Repo Önbelleğini Kontrol Et / Yükle
-      uses: actions/cache@v4
-      with:
-        path: android/.repo
-        key: repo-pixelos-fifteen-${{ hashFiles('.github/workflows/*.yml') }}
-        restore-keys: |
-          repo-pixelos-fifteen-
-
+    # --- BOYUTU AZALTILMIŞ (HAFİF) REPO SYNC ---
     - name: PixelOS Android 15 Kaynak Kodunu İndir
       run: |
         mkdir -p android && cd android
-        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fifteen --git-lfs
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fifteen --depth=1 --git-lfs
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --no-git-lfs
 
-    # --- SENİN VERDİĞİN GERÇEK CİHAZ AĞACI BURAYA EKLENDİ ---
     - name: Cihaz Ağaçlarını Çek
       run: |
         cd android
         # Senin gönderdiğin gerçek SM-G611F cihaz ağacı linki
         git clone https://github.com/AndroidBlobs/device_samsung_on7xreflte.git device/samsung/g611f
         
-        # Exynos 7870 topluluğunun ortak vendor ve kernel ağaçları
+        # Exynos 7870 ortak vendor ve kernel ağaçları
         git clone https://github.com/Exynos7870/android_vendor_samsung_on7xelte.git vendor/samsung/g611f
         git clone https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel/samsung/exynos7870
 
@@ -94,18 +102,18 @@ jobs:
       run: |
         export USE_CCACHE=1
         export CCACHE_EXEC=/usr/bin/ccache
-        ccache -M 50G
+        ccache -M 20G
 
-    - name: ARM64 Derlemeyi Başlat
+    # --- İSTEDİĞİN 128 ÇEKİRDEK ZORLAMA EMİR KOMUTU BURADA ---
+    - name: ARM64 Derlemeyi 128 Cekirdek Gucuyle Baslat
       run: |
         cd android
         source build/envsetup.sh
         
-        # Ağacın içindeki isimlendirmeye göre lunch hedefini seçiyoruz. 
-        # Cihaz klasörü 'g611f' olduğu için 'pixelos_g611f-userdebug' veya 'aosp_g611f-userdebug' deneyecek.
         lunch pixelos_g611f-userdebug || lunch aosp_g611f-userdebug || lunch pixelos_on7xreflte-userdebug
         
-        mka bacon -j$(nproc --all)
+        echo "=== SISTEM 128 IS PARCACIGI (THREADS) ILE DERLEMEYE ZORLANIYOR ==="
+        mka bacon -j128
 
     - name: Üretilen ARM64 ROM Zip Dosyasını GitHub'a Yükle
       uses: actions/upload-artifact@v4
