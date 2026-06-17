@@ -1,0 +1,56 @@
+name: J7 Prime 2 Android 15 arm64 GSI Builder
+
+on:
+  workflow_dispatch: # Telefondan "Run Workflow" butonuna basarak tetiklemeni sağlar
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Depoyu Klonla
+      uses: actions/checkout@v4
+
+    - name: Sunucu Alanını Temizle ve Araçları Kur
+      run: |
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+        sudo apt-get update
+        sudo apt-get install -y wget seandroid-utils simg2img img2simg p7zip-full aria2
+
+    - name: Saf Android 15 arm64 GSI İmajını İndir
+      run: |
+        mkdir workspace && cd workspace
+        # Google'ın resmi AOSP Android 15 arm64 GSI imajını çekiyoruz
+        aria2c -x16 -s16 "https://flash.android.com/gsi/aosp_arm64-exp-VP1A.260409.003-99999999-userdebug.zip" || \
+        wget "https://dl.google.com/android/vold/gsi/aosp_arm64-target.zip" # Alternatif link
+        7z x *.zip
+        mv system.img unsparse_system.img || true
+
+    - name: J7 Prime 2 İçin İmajı Hafiflet (Debloat ve Lite/Go Yapılandırması)
+      run: |
+        cd workspace
+        # İmaj dosyasını düzenlenebilir ham imaj formatına çeviriyoruz
+        simg2img unsparse_system.img raw_system.img || mv unsparse_system.img raw_system.img
+        mkdir system_mnt
+        sudo mount -o loop raw_system.img system_mnt
+        
+        # 1GB/2GB RAM için ağır Google ve AOSP servislerini imajdan söküyoruz
+        sudo rm -rf system_mnt/system/priv-app/Velvet
+        sudo rm -rf system_mnt/system/app/Ears
+        
+        # İşlem bittiğinde imajı güvenli şekilde kapatıyoruz
+        sudo umount system_mnt
+        img2simg raw_system.img j7_g611f_a15_arm64_gsi.img
+
+    - name: Hazırlanan GSI İmajını GitHub'a Yükle (Release)
+      uses: softprops/action-gh-release@v2
+      with:
+        files: workspace/j7_g611f_a15_arm64_gsi.img
+        name: J7 Prime 2 Android 15 arm64 GSI
+        tag_name: A15-GSI
+        body: "SM-G611F (Exynos 7870) için optimize edilmiş saf arm64 Android 15 GSI imajı. Binder64 destekli kernel ile flaşlanmalıdır."
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
