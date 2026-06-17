@@ -1,83 +1,119 @@
-name: J7 Prime 2 (64-bit) PixelOS Otomatik ROM Derleyici
+name: PixelOS Android 15 (Pure ARM64 Conversion) for SM-G611F
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manuel olarak çalıştırmak için buton tetikleyicisi
 
 jobs:
-  build_rom:
+  build:
     runs-on: ubuntu-22.04
+    
     steps:
-    - name: Depoyu Kontrol Et
+    - name: Depoyu Al (Checkout)
       uses: actions/checkout@v4
 
-    - name: Sunucu Disk Alanını Maksimum Seviyede Boşalt
-      uses: jlumbroso/free-disk-space@main
+    # GitHub'ın kısıtlı disk alanını (~100GB+ üzerine çıkarmak için) temizliyoruz
+    - name: Disk Alanını Maksimuma Çıkar
+      uses: easimon/maximize-build-space@master
       with:
-        tool-cache: true
-        android: true
-        dotnet: true
-        haskell: true
-        large-packages: true
-        docker-images: true
-        swap-storage: true
+        root-reserve-mb: 1024
+        swap-size-mb: 10240
+        remove-dotnet: 'true'
+        remove-android: 'true'
+        remove-haskell: 'true'
+        remove-codeql: 'true'
+        remove-docker-images: 'true'
 
-    - name: Derleme İçin Gerekli Sistem Paketlerini Kur
+    - name: 64-Bit ve 32-Bit Geliştirici Paketlerini Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf lib32readline-dev lib32z1-dev liblz4-tool libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3
+        sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python-is-python3 crossbuild-essential-arm64 crossbuild-essential-armhf
 
-    - name: Google Repo Aracını Kur ve Yapılandır
+    - name: Repo Aracını Kur
       run: |
         mkdir -p ~/bin
         curl https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
         chmod a+x ~/bin/repo
         sudo ln -sf ~/bin/repo /usr/bin/repo
-        git config --global user.name "PixelOSBuilder"
-        git config --global user.email "pixelos@build.local"
 
-    - name: PixelOS Kaynak Kodlarını ve Ağaçları İndir
+    - name: Git Kimlik Bilgilerini Ayarla
       run: |
-        mkdir pixelos
-        cd pixelos
+        git config --global user.name "Geliştirici"
+        git config --global user.email "developer@example.com"
+
+    - name: PixelOS Android 15 Kaynak Kodunu İndir
+      run: |
+        mkdir android && cd android
+        # PixelOS Android 15 (fifteen) tabanı
+        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fifteen --git-lfs
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+    - name: Cihaz Ağaçlarını Çek
+      run: |
+        cd android
+        # Buradaki repoları kendi kullandığın ağaçlarla değiştirmelisin
+        git clone https://github.com/Kendi-Depon/android_device_samsung_g611f.git -b android-15 device/samsung/g611f
+        git clone https://github.com/Kendi-Depon/android_vendor_samsung_g611f.git -b android-15 vendor/samsung/g611f
+        git clone https://github.com/Kendi-Depon/android_kernel_samsung_exynos7870.git -b android-15 kernel/samsung/exynos7870
+
+    # YAML İÇİNDE 64-BIT DÖNÜŞÜMÜ (OTOMASYON)
+    # Bu adım, çekilen 32-bitlik cihaz ağacını dinamik olarak 64-bit (ARM64) mimariye çevirir.
+    - name: Cihaz Ağacını 64-Bit Mimariye Zorla (ARM64 Conversion)
+      run: |
+        cd android/device/samsung/g611f
         
-        # Ana sistemi PixelOS Fourteen olarak başlatıyoruz
-        repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen --git-lfs --depth=1
+        # BoardConfig.mk içindeki eski TARGET_ARCH yapılandırmalarını temizle
+        sed -i '/TARGET_ARCH/d' BoardConfig.mk
+        sed -i '/TARGET_CPU/d' BoardConfig.mk
         
-        # Yerel manifest - Hata veren tag'leri değil, lineage-21 dalını kullanıyoruz
-        mkdir -p .repo/local_manifests
-        cat <<EOF > .repo/local_manifests/g611f.xml
-        <?xml version="1.0" encoding="UTF-8"?>
-        <manifest>
-          <remote name="github-j7" fetch="https://github.com/" />
-          
-          <remove-project name="platform/prebuilts/rust" />
-          <remove-project name="platform/prebuilts/clang/host/linux-x86" />
-          
-          <project path="device/samsung/universal7870-common" name="Exynos7870/android_device_samsung_universal7870-common" remote="github-j7" revision="lineage-21" />
-          <project path="device/samsung/g611f" name="Exynos7870/android_device_samsung_g611f" remote="github-j7" revision="lineage-21" />
-          <project path="kernel/samsung/universal7870" name="Exynos7870/android_kernel_samsung_universal7870" remote="github-j7" revision="lineage-21" />
-          <project path="vendor/samsung" name="Exynos7870/android_vendor_samsung" remote="github-j7" revision="lineage-21" />
-        </manifest>
+        # BoardConfig.mk dosyasına saf 64-bit ve Binder64 komutlarını enjekte et
+        cat <<EOF >> BoardConfig.mk
+
+        # --- YAML Tarafından Otomatik Eklenen 64-Bit Yapılandırması ---
+        TARGET_ARCH := arm64
+        TARGET_ARCH_VARIANT := armv8-a
+        TARGET_CPU_ABI := arm64-v8a
+        TARGET_CPU_VARIANT := generic
+
+        TARGET_2ND_ARCH := arm
+        TARGET_2ND_ARCH_VARIANT := armv7-a-neon
+        TARGET_2ND_CPU_ABI := armeabi-v7a
+        TARGET_2ND_CPU_ABI2 := armeabi
+        TARGET_2ND_CPU_VARIANT := generic
+
+        TARGET_USES_64_BIT_BINDER := true
+        # -------------------------------------------------------------
         EOF
+        
+        echo "BoardConfig.mk başarıyla 64-bit moduna güncellendi."
 
-        # 15 dakikalık zaman sınırlı, takılmayı engelleyen indirme döngüsü
-        for i in {1..5}; do
-          echo "İndirme denemesi #$i başlatılıyor..."
-          timeout 15m repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune && break || echo "Bağlantı koptu, tekrar deneniyor..."
-          sleep 10
-        done
-
-    - name: PixelOS Kurulumunu Başlat ve Flaşlanabilir Zip Üret
+    # Kernel'ın 32-bit (arch/arm) yerine 64-bit (arch/arm64) derlenmesi için Makefile optimizasyonu
+    - name: Kernel Derleyicisini ARM64 Olarak Ayarla
       run: |
-        cd pixelos
+        cd android
+        # Android derleme sistemine kernel mimarisinin arm64 olduğunu bildiriyoruz
+        export TARGET_KERNEL_ARCH=arm64
+        export ARCH=arm64
+
+    - name: CCACHE Önbelleğini Yapılandır
+      run: |
+        export USE_CCACHE=1
+        export CCACHE_EXEC=/usr/bin/ccache
+        ccache -M 50G
+
+    - name: ARM64 Derlemeyi Başlat
+      run: |
+        cd android
         source build/envsetup.sh
-        # Hata vermeyen, kesinleşmiş lunch kombinasyonu
-        lunch pixelos_g611f-ap2a-userdebug
+        
+        # Cihaz ağacındaki isimlendirmeye göre lunch hedefi (Değiştirebilirsin)
+        lunch pixelos_g611f-userdebug
+        
+        # Derleme komutu (bacon = flash edilebilir zip çıktısı üretir)
         mka bacon -j$(nproc --all)
 
-    - name: Oluşan Hazır ZIP Dosyasını İndirme Linki Yap
+    - name: Üretilen ARM64 ROM Zip Dosyasını GitHub'a Yükle
       uses: actions/upload-artifact@v4
       with:
-        name: PixelOS-G611F-Flashable-ROM
-        path: pixelos/out/target/product/g611f/PixelOS_*.zip
+        name: PixelOS-Android15-64Bit-SM-G611F
+        path: android/out/target/product/g611f/*.zip
         
