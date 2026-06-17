@@ -11,23 +11,14 @@ jobs:
     - name: Depoyu Al (Checkout)
       uses: actions/checkout@v4
 
-    # 1. ADIM: Paketleri disk hâlâ standart düzenindeyken kuruyoruz (Hata vermemesi için)
-    # Çakışma yaratan paketler olmadan temiz kurulum yapılıyor
     - name: Geliştirici Paketlerini Kur
       run: |
         sudo apt-get update
         sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib git gnupg gperf imagemagick lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev python3 python-is-python3
 
-    # 2. ADIM: Paketler kurulduktan sonra root dizinindeki gereksiz devasa klasörleri elle siliyoruz
-    # Bu yöntem 'No space left on device' hatası vermeden temiz ve güvenli alan açar
     - name: Manuel Disk Alanı Temizliği Yap
       run: |
-        sudo rm -rf /usr/share/dotnet
-        sudo rm -rf /usr/local/lib/android
-        sudo rm -rf /opt/ghc
-        sudo rm -rf /usr/share/swift
-        sudo rm -rf /usr/local/share/boost
-        sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/share/swift /usr/local/share/boost "$AGENT_TOOLSDIRECTORY"
         sudo docker image prune --all --force
         df -h
 
@@ -43,19 +34,31 @@ jobs:
         git config --global user.name "Geliştirici"
         git config --global user.email "developer@example.com"
 
+    # İlk seferde kodları indirecek, sonraki çalıştırmalarda 20 dakika bekletmeyecek önbellek adımı
+    - name: Repo Önbelleğini Kontrol Et / Yükle
+      uses: actions/cache@v4
+      with:
+        path: android/.repo
+        key: repo-pixelos-fifteen-${{ hashFiles('.github/workflows/*.yml') }}
+        restore-keys: |
+          repo-pixelos-fifteen-
+
     - name: PixelOS Android 15 Kaynak Kodunu İndir
       run: |
-        mkdir android && cd android
+        mkdir -p android && cd android
         repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fifteen --git-lfs
         repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
 
+    # --- SENİN VERDİĞİN GERÇEK CİHAZ AĞACI BURAYA EKLENDİ ---
     - name: Cihaz Ağaçlarını Çek
       run: |
         cd android
-        # NOT: Kendi repolarına göre düzenlemeyi unutma!
-        git clone https://github.com/Kendi-Depon/android_device_samsung_g611f.git -b android-15 device/samsung/g611f
-        git clone https://github.com/Kendi-Depon/android_vendor_samsung_g611f.git -b android-15 vendor/samsung/g611f
-        git clone https://github.com/Kendi-Depon/android_kernel_samsung_exynos7870.git -b android-15 kernel/samsung/exynos7870
+        # Senin gönderdiğin gerçek SM-G611F cihaz ağacı linki
+        git clone https://github.com/AndroidBlobs/device_samsung_on7xreflte.git device/samsung/g611f
+        
+        # Exynos 7870 topluluğunun ortak vendor ve kernel ağaçları
+        git clone https://github.com/Exynos7870/android_vendor_samsung_on7xelte.git vendor/samsung/g611f
+        git clone https://github.com/Exynos7870/android_kernel_samsung_exynos7870.git kernel/samsung/exynos7870
 
     - name: Cihaz Ağacını 64-Bit Mimariye Zorla (ARM64 Conversion)
       run: |
@@ -97,7 +100,11 @@ jobs:
       run: |
         cd android
         source build/envsetup.sh
-        lunch pixelos_g611f-userdebug
+        
+        # Ağacın içindeki isimlendirmeye göre lunch hedefini seçiyoruz. 
+        # Cihaz klasörü 'g611f' olduğu için 'pixelos_g611f-userdebug' veya 'aosp_g611f-userdebug' deneyecek.
+        lunch pixelos_g611f-userdebug || lunch aosp_g611f-userdebug || lunch pixelos_on7xreflte-userdebug
+        
         mka bacon -j$(nproc --all)
 
     - name: Üretilen ARM64 ROM Zip Dosyasını GitHub'a Yükle
