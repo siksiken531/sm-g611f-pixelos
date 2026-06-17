@@ -10,7 +10,7 @@ jobs:
     - name: Depoyu Kontrol Et
       uses: actions/checkout@v4
 
-    - name: Sunucu Disk Alanını Maksimum Seviyede Boşalt (En Güçlü Temizlik)
+    - name: Sunucu Disk Alanını Maksimum Seviyede Boşalt
       uses: jlumbroso/free-disk-space@main
       with:
         tool-cache: true
@@ -43,7 +43,7 @@ jobs:
         # Ana sistemi PixelOS Fourteen olarak başlatıyoruz
         repo init -u https://github.com/PixelOS-AOSP/manifest.git -b fourteen --git-lfs --depth=1
         
-        # Yerel manifest oluşturma - Dal adını 'lineage-21' olarak netleştiriyoruz
+        # Yerel manifest - Hata veren tag'leri değil, lineage-21 dalını kullanıyoruz
         mkdir -p .repo/local_manifests
         cat <<EOF > .repo/local_manifests/g611f.xml
         <?xml version="1.0" encoding="UTF-8"?>
@@ -60,10 +60,10 @@ jobs:
         </manifest>
         EOF
 
-        # 15 dakikalık zaman sınırlı, takılmayı engelleyen akıllı indirme döngüsü
+        # 15 dakikalık zaman sınırlı, takılmayı engelleyen indirme döngüsü
         for i in {1..5}; do
           echo "İndirme denemesi #$i başlatılıyor..."
-          timeout 15m repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune && break || echo "Bağlantı koptu veya zaman aşımına uğradı, tekrar deneniyor..."
+          timeout 15m repo sync -c -j4 --force-sync --no-clone-bundle --no-tags --current-branch --prune && break || echo "Bağlantı koptu, tekrar deneniyor..."
           sleep 10
         done
 
@@ -71,7 +71,7 @@ jobs:
       run: |
         cd pixelos
         source build/envsetup.sh
-        # Loglarda doğruladığımız çalışan sürüm kombinasyonu
+        # Hata vermeyen, kesinleşmiş lunch kombinasyonu
         lunch pixelos_g611f-ap2a-userdebug
         mka bacon -j$(nproc --all)
 
