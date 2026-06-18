@@ -8,15 +8,31 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Samsung Resmi Açık Kaynak Sitesinden Kaynak Kodunu İndir
+    - name: Kullanıcının Doğrudan Google Drive Linkinden Resmi Kodu İndir
       run: |
-        # SM-G611F için Samsung'un resmi kaynak kod paketini sunucuya indiriyoruz
-        # Not: Samsung'un indirme linkleri bazen doğrudan curl izni vermezse alternatif açık kaynak yansısını kullanıyoruz
-        curl -L "https://github.com/exynos7870/android_kernel_samsung_exynos7870/archive/refs/heads/pie.tar.gz" -o kernel.tar.gz
+        # Onay duvarını aşan doğrudan indirme linkini kullanarak zip dosyasını çekiyoruz
+        curl -L "https://drive.usercontent.google.com/download?id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg&export=download" -o main_samsung.zip
         
-        # Zip/Tar paketini klasöre açıyoruz
-        tar -xf kernel.tar.gz --strip-components=1
-        rm kernel.tar.gz
+        # Zip dosyasını açıyoruz
+        mkdir -p samsung_extracted
+        unzip main_samsung.zip -d samsung_extracted || true
+        rm main_samsung.zip
+
+        # Samsung ana paketinin içindeki gerçek Kernel paketini bulup buraya çıkarıyoruz
+        cd samsung_extracted
+        KERNEL_PACK=$(find . -name "*Kernel*" -o -name "*kernel*")
+        if [ ! -z "$KERNEL_PACK" ]; then
+          if [[ "$KERNEL_PACK" == *.zip ]]; then
+            unzip "$KERNEL_PACK" -d $GITHUB_WORKSPACE/
+          else
+            tar -xf "$KERNEL_PACK" -C $GITHUB_WORKSPACE/ || tar -xf "$KERNEL_PACK" --strip-components=1 -C $GITHUB_WORKSPACE/
+          fi
+        else
+          # Eğer alt paket yoksa her şeyi doğrudan ana dizine taşı
+          cp -r * $GITHUB_WORKSPACE/
+        fi
+        cd $GITHUB_WORKSPACE
+        rm -rf samsung_extracted
 
     - name: Gerekli Linux Paketlerini Kur
       run: |
@@ -43,19 +59,21 @@ jobs:
         export CC=clang
 
         mkdir -p out
-        
-        # Burası kritik: 32-bit klasöründeki resmi konfigürasyonu arm64 klasörüne taşıyoruz
         mkdir -p arch/arm64/configs
-        if [ -f arch/arm/configs/exynos7870_defconfig ]; then
+        
+        # Klasördeki ilk bulduğu defconfig'i arm64'e kopyala
+        if [ -f arch/arm/configs/exynos7870_g611f_defconfig ]; then
+          cp arch/arm/configs/exynos7870_g611f_defconfig arch/arm64/configs/exynos7870_defconfig
+        elif [ -f arch/arm/configs/exynos7870_defconfig ]; then
           cp arch/arm/configs/exynos7870_defconfig arch/arm64/configs/exynos7870_defconfig
-        elif [ -f arch/arm/configs/j7poplte_defconfig ]; then
-          cp arch/arm/configs/j7poplte_defconfig arch/arm64/configs/exynos7870_defconfig
+        else
+          cp arch/arm/configs/*defconfig arch/arm64/configs/exynos7870_defconfig
         fi
         
-        # 64-bit tabanlı ilk konfigürasyonu oluşturmayı dene
+        # 64-bit tabanlı konfigürasyonu oluştur
         make O=out exynos7870_defconfig
 
-        # Motoru (Kernel'ı) derlemeye başla
+        # Derlemeyi başlat
         make O=out -j$(nproc --all)
 
     - name: Hata Loglarını ve Çıktıları Kurtar
