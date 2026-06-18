@@ -8,37 +8,41 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Google Drive Onay Duvarını Aşarak Kodu İndir
+    - name: GoFile Üzerindeki Resmi Samsung Kodunu Doğrudan İndir
       run: |
-        # 1. Google'ın büyük dosyalar için çıkardığı o uyarı sayfasından gizli onay kodunu (confirm token) çekiyoruz
-        CONFIRM=$(curl -s -c cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" | grep -o 'confirm=[^&]*' | head -n1)
+        # GoFile indirme sayfasından gerçek indirme tokenını ve sunucu linkini dinamik olarak çekiyoruz
+        # Sayfa linki: https://gofile.io/d/c49ad81a-d258-47fc-8676-dcfad8969d81
         
-        # 2. Eğer onay kodu bulunduysa onunla, bulunmadıysa direkt indiriyoruz
-        if [ ! -z "$CONFIRM" ]; then
-          curl -L -b cookies.txt "https://docs.google.com/uc?export=download&${CONFIRM}&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o samsung_kernel.zip
+        # GoFile API'sinden dosyanın doğrudan indirme linkini alan komut:
+        DIRECT_URL=$(curl -s "https://api.gofile.io/getContents?contentId=c49ad81a-d258-47fc-8676-dcfad8969d81" | grep -o '"link":"[^"]*' | cut -d'"' -f4)
+        
+        # Eğer API linki doğrudan vermezse alternatif indirme rotasını kullanıyoruz
+        if [ ! -z "$DIRECT_URL" ]; then
+          curl -L "$DIRECT_URL" -o samsung_kernel.zip
         else
-          curl -L -b cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o samsung_kernel.zip
+          # Alternatif doğrudan sunucu rotası
+          curl -L "https://store1.gofile.io/download/web/c49ad81a-d258-47fc-8676-dcfad8969d81/SM-G611F_MEA_PP_Opensource.zip" -o samsung_kernel.zip
         fi
 
-        # 3. İndirilen ana zip dosyasını ayıkla
-        mkdir -p extracted
-        unzip samsung_kernel.zip -d extracted || true
-        rm samsung_kernel.zip cookies.txt
-        
-        # 4. Samsung ana paketinin içindeki gerçek "Kernel" paketini bul ve ana dizine aç
-        cd extracted
-        INNER_PACK=$(find . -name "*Kernel*" -o -name "*kernel*")
-        if [ ! -z "$INNER_PACK" ]; then
-          if [[ "$INNER_PACK" == *.zip ]]; then
-            unzip "$INNER_PACK" -d $GITHUB_WORKSPACE/
+        # Klasör oluştur ve ana zip'i ayıkla
+        mkdir -p samsung_extracted
+        unzip samsung_kernel.zip -d samsung_extracted || true
+        rm samsung_kernel.zip
+
+        # Samsung ana paketinin içindeki gerçek Kernel paketini bulup ana dizine çıkarıyoruz
+        cd samsung_extracted
+        KERNEL_PACK=$(find . -name "*Kernel*" -o -name "*kernel*")
+        if [ ! -z "$KERNEL_PACK" ]; then
+          if [[ "$KERNEL_PACK" == *.zip ]]; then
+            unzip "$KERNEL_PACK" -d $GITHUB_WORKSPACE/
           else
-            tar -xf "$INNER_PACK" -C $GITHUB_WORKSPACE/ || tar -xf "$INNER_PACK" --strip-components=1 -C $GITHUB_WORKSPACE/
+            tar -xf "$KERNEL_PACK" -C $GITHUB_WORKSPACE/ || tar -xf "$KERNEL_PACK" --strip-components=1 -C $GITHUB_WORKSPACE/
           fi
         else
           cp -r * $GITHUB_WORKSPACE/
         fi
         cd $GITHUB_WORKSPACE
-        rm -rf extracted
+        rm -rf samsung_extracted
 
     - name: Gerekli Linux Paketlerini Kur
       run: |
@@ -65,7 +69,7 @@ jobs:
         mkdir -p out
         mkdir -p arch/arm64/configs
         
-        # Orijinal konfigürasyonu bul ve arm64 klasörüne kopyala
+        # Orijinal konfigürasyonu arm64 klasörüne taşıyoruz
         if [ -f arch/arm/configs/exynos7870_g611f_defconfig ]; then
           cp arch/arm/configs/exynos7870_g611f_defconfig arch/arm64/configs/exynos7870_defconfig
         elif [ -f arch/arm/configs/exynos7870_defconfig ]; then
@@ -74,11 +78,13 @@ jobs:
           cp arch/arm/configs/*defconfig arch/arm64/configs/exynos7870_defconfig
         fi
         
-        # Defconfig oluştur ve derle
+        # 64-bit tabanlı konfigürasyonu oluşturmayı dene
         make O=out exynos7870_defconfig
+
+        # Motoru (Kernel'ı) derlemeye başla
         make O=out -j$(nproc --all)
 
-    - name: Hata Loglarını Kurtar
+    - name: Hata Loglarını ve Çıktıları Kurtar
       if: always()
       uses: actions/upload-artifact@v4
       with:
