@@ -10,8 +10,8 @@ jobs:
     steps:
     - name: Orijinal Samsung Kernel Kaynak Kodlarını GitHub Sunucusuna İndir
       run: |
-        git clone https://github.com/exynos7870/android_kernel_samsung_exynos7870.git -b master .
-        # Temiz bir başlangıç için eski git geçmişini silelim
+        # Doğru dal olan 'pie' dalını çekiyoruz
+        git clone https://github.com/exynos7870/android_kernel_samsung_exynos7870.git -b pie .
         rm -rf .git
 
     - name: Gerekli Linux Paketlerini Kur
