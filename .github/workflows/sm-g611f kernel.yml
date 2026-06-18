@@ -1,95 +1,267 @@
-name: SM-G611F Sıfırdan 64-Bit Kernel Derleyici
-
+name: 🏭 Create Vendor for SM-G611F
 on:
   workflow_dispatch:
+    inputs:
+      device_codename:
+        description: 'Device codename'
+        required: true
+        default: 'g611f'
+      android_version:
+        description: 'Android version'
+        required: true
+        default: '15'
 
 jobs:
-  build:
+  create-vendor:
     runs-on: ubuntu-22.04
-
     steps:
-    - name: GoFile Üzerindeki Resmi Samsung Kodunu Doğrudan İndir
+    - name: 📦 Install dependencies
       run: |
-        # GoFile indirme sayfasından gerçek indirme tokenını ve sunucu linkini dinamik olarak çekiyoruz
-        # Sayfa linki: https://gofile.io/d/c49ad81a-d258-47fc-8676-dcfad8969d81
-        
-        # GoFile API'sinden dosyanın doğrudan indirme linkini alan komut:
-        DIRECT_URL=$(curl -s "https://api.gofile.io/getContents?contentId=c49ad81a-d258-47fc-8676-dcfad8969d81" | grep -o '"link":"[^"]*' | cut -d'"' -f4)
-        
-        # Eğer API linki doğrudan vermezse alternatif indirme rotasını kullanıyoruz
-        if [ ! -z "$DIRECT_URL" ]; then
-          curl -L "$DIRECT_URL" -o samsung_kernel.zip
-        else
-          # Alternatif doğrudan sunucu rotası
-          curl -L "https://store1.gofile.io/download/web/c49ad81a-d258-47fc-8676-dcfad8969d81/SM-G611F_MEA_PP_Opensource.zip" -o samsung_kernel.zip
-        fi
+        sudo apt update
+        sudo apt install -y git repo xmlstarlet python3-pip wget unzip
+        pip3 install jinja2
 
-        # Klasör oluştur ve ana zip'i ayıkla
-        mkdir -p samsung_extracted
-        unzip samsung_kernel.zip -d samsung_extracted || true
-        rm samsung_kernel.zip
-
-        # Samsung ana paketinin içindeki gerçek Kernel paketini bulup ana dizine çıkarıyoruz
-        cd samsung_extracted
-        KERNEL_PACK=$(find . -name "*Kernel*" -o -name "*kernel*")
-        if [ ! -z "$KERNEL_PACK" ]; then
-          if [[ "$KERNEL_PACK" == *.zip ]]; then
-            unzip "$KERNEL_PACK" -d $GITHUB_WORKSPACE/
-          else
-            tar -xf "$KERNEL_PACK" -C $GITHUB_WORKSPACE/ || tar -xf "$KERNEL_PACK" --strip-components=1 -C $GITHUB_WORKSPACE/
-          fi
-        else
-          cp -r * $GITHUB_WORKSPACE/
-        fi
-        cd $GITHUB_WORKSPACE
-        rm -rf samsung_extracted
-
-    - name: Gerekli Linux Paketlerini Kur
+    - name: 🔧 Clone AOSP vendor template
       run: |
-        sudo apt-get update
-        sudo apt-get install -y bc build-essential libelf-dev libssl-dev bison flex git rsync libncurses5-dev tcl crossbuild-essential-arm64
-
-    - name: Google AOSP Clang Derleyicisini Kur (64-Bit İçin)
+        mkdir -p ~/vendor_workspace
+        cd ~/vendor_workspace
+        git clone https://android.googlesource.com/platform/hardware/interfaces -b android-15.0.0_r1
+        git clone https://android.googlesource.com/platform/vendor/qcom/opensource/cryptfs_hw -b android-15.0.0_r1
+        
+    - name: 📁 Create vendor structure
       run: |
-        mkdir -p $GITHUB_WORKSPACE/clang
-        cd $GITHUB_WORKSPACE/clang
-        curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android10-release/clang-r353395c.tar.gz
-        tar -xf clang-r353395c.tar.gz
+        cd ~/vendor_workspace
+        mkdir -p vendor/samsung/${{ github.event.inputs.device_codename }}
+        cd vendor/samsung/${{ github.event.inputs.device_codename }}
+        
+        # Ana vendor.mk
+        cat > vendor.mk << 'EOF'
+        # Vendor makefile for SM-G611F
+        LOCAL_PATH := $(call my-dir)
+        
+        PRODUCT_PACKAGES += \
+            android.hardware.audio@7.0-impl \
+            android.hardware.audio.effect@7.0-impl \
+            android.hardware.bluetooth@1.0-impl \
+            android.hardware.camera.provider@2.4-impl \
+            android.hardware.graphics.allocator@2.0-impl \
+            android.hardware.graphics.composer@2.1-impl \
+            android.hardware.graphics.mapper@2.0-impl \
+            android.hardware.health@2.0-impl \
+            android.hardware.light@2.0-impl \
+            android.hardware.power@1.0-impl \
+            android.hardware.sensors@1.0-impl \
+            android.hardware.wifi@1.0-impl
+        
+        # Vendor libs
+        PRODUCT_COPY_FILES += \
+            $(call find-copy-subdir-files,*,vendor/samsung/g611f/proprietary/vendor,vendor)
+        
+        # Vendor properties
+        PRODUCT_PROPERTY_OVERRIDES += \
+            ro.vendor.build.date=$(shell date -u +%Y%m%d) \
+            ro.vendor.build.date.utc=$(shell date -u +%s) \
+            ro.vendor.product.model=SM-G611F \
+            ro.vendor.product.device=g611f \
+            ro.vendor.product.board=universal7870 \
+            ro.vendor.product.brand=samsung \
+            ro.vendor.product.manufacturer=Samsung
+        EOF
+        
+        # BoardConfigVendor.mk
+        cat > BoardConfigVendor.mk << 'EOF'
+        # Vendor board config
+        
+        # Graphics
+        USE_OPENGL_RENDERER := true
+        TARGET_USES_GRALLOC1 := true
+        TARGET_USES_HWC2 := true
+        TARGET_USES_ION := true
+        
+        # Audio
+        AUDIO_FEATURE_ENABLED_EXTN_FORMATS := true
+        AUDIO_FEATURE_ENABLED_EXTN_RESAMPLER := true
+        AUDIO_FEATURE_ENABLED_DYNAMIC_LOG := true
+        
+        # Camera
+        TARGET_NEEDS_CAMERA_HAL := true
+        USE_CAMERA_STUB := false
+        
+        # WiFi
+        WIFI_HIDL_FEATURE_DUAL_INTERFACE := true
+        WIFI_DRIVER_MODULE_PATH := "/vendor/lib/modules/wlan.ko"
+        WIFI_DRIVER_MODULE_NAME := "wlan"
+        WIFI_DRIVER_FW_PATH_STA := "/vendor/firmware/wlan_sta.bin"
+        WIFI_DRIVER_FW_PATH_AP := "/vendor/firmware/wlan_ap.bin"
+        
+        # Bluetooth
+        BOARD_BLUETOOTH_BDROID_BUILDCFG_INCLUDE_DIR := vendor/samsung/g611f/bluetooth
+        
+        # RIL
+        BOARD_PROVIDES_LIBRIL := true
+        EOF
+        
+        # device-vendor.mk
+        cat > device-vendor.mk << 'EOF'
+        # Device specific vendor config
+        
+        $(call inherit-product, vendor/samsung/g611f/vendor.mk)
+        
+        # Vendor sepolicy
+        BOARD_VENDOR_SEPOLICY_DIRS += vendor/samsung/g611f/sepolicy/vendor
+        
+        # Init scripts
+        PRODUCT_COPY_FILES += \
+            vendor/samsung/g611f/init/init.g611f.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.g611f.rc \
+            vendor/samsung/g611f/init/init.g611f.usb.rc:$(TARGET_COPY_OUT_VENDOR)/etc/init/init.g611f.usb.rc
+        
+        # WiFi config
+        PRODUCT_COPY_FILES += \
+            vendor/samsung/g611f/wifi/wpa_supplicant.conf:$(TARGET_COPY_OUT_VENDOR)/etc/wifi/wpa_supplicant.conf \
+            vendor/samsung/g611f/wifi/p2p_supplicant.conf:$(TARGET_COPY_OUT_VENDOR)/etc/wifi/p2p_supplicant.conf
+        EOF
 
-    - name: Kodları 64-Bit'e Zorla ve Derlemeyi Başlat
+    - name: 📁 Create proprietary blobs structure
       run: |
-        export ARCH=arm64
-        export SUBARCH=arm64
+        cd ~/vendor_workspace/vendor/samsung/${{ github.event.inputs.device_codename }}
         
-        export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
-        export CROSS_COMPILE=aarch64-linux-gnu-
-        export CLANG_TRIPLE=aarch64-linux-gnu-
-        export CC=clang
-
-        mkdir -p out
-        mkdir -p arch/arm64/configs
+        # Proprietary klasör yapısı
+        mkdir -p proprietary/vendor/lib
+        mkdir -p proprietary/vendor/lib64
+        mkdir -p proprietary/vendor/lib/hw
+        mkdir -p proprietary/vendor/lib64/hw
+        mkdir -p proprietary/vendor/firmware
+        mkdir -p proprietary/vendor/etc
+        mkdir -p proprietary/vendor/bin
         
-        # Orijinal konfigürasyonu arm64 klasörüne taşıyoruz
-        if [ -f arch/arm/configs/exynos7870_g611f_defconfig ]; then
-          cp arch/arm/configs/exynos7870_g611f_defconfig arch/arm64/configs/exynos7870_defconfig
-        elif [ -f arch/arm/configs/exynos7870_defconfig ]; then
-          cp arch/arm/configs/exynos7870_defconfig arch/arm64/configs/exynos7870_defconfig
-        else
-          cp arch/arm/configs/*defconfig arch/arm64/configs/exynos7870_defconfig
-        fi
+        # dummy dosyalar (gerçek blob'ların varsa değiştir)
+        echo "Vendor blob placeholder" > proprietary/vendor/lib/hw/audio.primary.exynos7870.so
+        echo "Vendor blob placeholder" > proprietary/vendor/lib/hw/camera.exynos7870.so
+        echo "Vendor blob placeholder" > proprietary/vendor/lib/hw/gralloc.exynos7870.so
+        echo "Vendor blob placeholder" > proprietary/vendor/lib/hw/hwcomposer.exynos7870.so
+        echo "Vendor blob placeholder" > proprietary/vendor/lib/hw/memtrack.exynos7870.so
+        echo "Vendor blob placeholder" > proprietary/vendor/lib/libwifi-hal.so
+
+    - name: 📁 Create init scripts
+      run: |
+        cd ~/vendor_workspace/vendor/samsung/${{ github.event.inputs.device_codename }}
+        mkdir -p init
         
-        # 64-bit tabanlı konfigürasyonu oluşturmayı dene
-        make O=out exynos7870_defconfig
+        cat > init/init.g611f.rc << 'EOF'
+        on early-init
+            # Set permissions
+            chmod 0755 /vendor/bin/hw/
+            chmod 0644 /vendor/etc/permissions/
+        
+        on init
+            # Mount points
+            mkdir /mnt/vendor 0771 root system
+            mkdir /mnt/vendor/efs 0771 radio radio
+        
+        on post-fs-data
+            # Start vendor services
+            start vendor.audio-hal
+            start vendor.camera-hal
+        
+        service vendor.audio-hal /vendor/bin/hw/android.hardware.audio@7.0-service
+            class hal
+            user system
+            group audio
+            ioprio rt 4
+        
+        service vendor.camera-hal /vendor/bin/hw/android.hardware.camera.provider@2.4-service
+            class hal
+            user system
+            group camera
+        EOF
 
-        # Motoru (Kernel'ı) derlemeye başla
-        make O=out -j$(nproc --all)
+    - name: 📁 Create sepolicy
+      run: |
+        cd ~/vendor_workspace/vendor/samsung/${{ github.event.inputs.device_codename }}
+        mkdir -p sepolicy/vendor
+        
+        # vendor sepolicy
+        cat > sepolicy/vendor/file_contexts << 'EOF'
+        /vendor/bin/hw/android\.hardware\.audio@7\.0-service    u:object_r:hal_audio_default_exec:s0
+        /vendor/bin/hw/android\.hardware\.camera\.provider@2\.4-service u:object_r:hal_camera_default_exec:s0
+        /vendor/lib/hw/audio\.primary\.exynos7870\.so           u:object_r:same_process_hal_file:s0
+        EOF
+        
+        cat > sepolicy/vendor/hal_audio.te << 'EOF'
+        type hal_audio_default, domain;
+        type hal_audio_default_exec, exec_type, file_type, vendor_file_type;
+        init_daemon_domain(hal_audio_default)
+        allow hal_audio_default self:capability { sys_nice };
+        allow hal_audio_default audio_device:chr_file rw_file_perms;
+        EOF
 
-    - name: Hata Loglarını ve Çıktıları Kurtar
-      if: always()
+    - name: 📁 Create WiFi config
+      run: |
+        cd ~/vendor_workspace/vendor/samsung/${{ github.event.inputs.device_codename }}
+        mkdir -p wifi
+        
+        cat > wifi/wpa_supplicant.conf << 'EOF'
+        ctrl_interface=/vendor/etc/wifi/wpa_supplicant
+        ctrl_interface_group=wifi
+        update_config=1
+        device_name=SM-G611F
+        manufacturer=Samsung
+        model_name=SM-G611F
+        config_methods=virtual_push_button physical_display keypad
+        p2p_device_name=SM-G611F
+        EOF
+
+    - name: 📁 Create bluetooth config
+      run: |
+        cd ~/vendor_workspace/vendor/samsung/${{ github.event.inputs.device_codename }}
+        mkdir -p bluetooth
+        
+        cat > bluetooth/bt_vendor.conf << 'EOF'
+        UART_PORT=/dev/ttySAC0
+        FW_PATCH_FILE=/vendor/firmware/bt_firmware.bin
+        EOF
+
+    - name: 📦 Package vendor tree
+      run: |
+        cd ~/vendor_workspace
+        tar -czf vendor_samsung_${{ github.event.inputs.device_codename }}_A${{ github.event.inputs.android_version }}.tar.gz vendor/samsung/${{ github.event.inputs.device_codename }}
+        
+        # Vendor bilgileri
+        cat > vendor_info.txt << 'EOF'
+        === VENDOR INFO ===
+        Device: SM-G611F (Galaxy J7 Prime 2)
+        Codename: g611f
+        Chipset: Exynos 7870
+        Android: 15
+        Treble: DISABLED
+        Architecture: ARM64 (32-bit kernel)
+        
+        === FILES INCLUDED ===
+        - vendor.mk
+        - BoardConfigVendor.mk
+        - device-vendor.mk
+        - Proprietary blobs structure
+        - Init scripts
+        - Sepolicy
+        - WiFi config
+        - Bluetooth config
+        
+        === HOW TO USE ===
+        1. Extract to AOSP root: tar -xzf vendor_samsung_g611f_A15.tar.gz
+        2. Add to device tree: device/samsung/g611f/device.mk
+        3. Build: lunch aosp_g611f-userdebug && make bacon
+        EOF
+
+    - name: 📤 Upload vendor tree
       uses: actions/upload-artifact@v4
       with:
-        name: ARM64-Official-Samsung-Results
+        name: vendor_samsung_${{ github.event.inputs.device_codename }}_A${{ github.event.inputs.android_version }}
         path: |
-          out/arch/arm64/boot/Image*
-          out/.config
-          
+          ~/vendor_workspace/vendor_samsung_${{ github.event.inputs.device_codename }}_A${{ github.event.inputs.android_version }}.tar.gz
+          ~/vendor_workspace/vendor_info.txt
+        retention-days: 30
+
+    - name: 📊 Show vendor structure
+      run: |
+        cd ~/vendor_workspace
+        tree -L 4 vendor/samsung/${{ github.event.inputs.device_codename }}/ || ls -la vendor/samsung/${{ github.event.inputs.device_codename }}/
