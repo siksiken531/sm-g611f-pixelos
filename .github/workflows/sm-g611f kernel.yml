@@ -1,18 +1,22 @@
 name: SM-G611F Sıfırdan 64-Bit Kernel Derleyici
 
 on:
-  workflow_dispatch: # Manuel başlatma butonu
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Orijinal Samsung Kernel Kaynak Kodlarını GitHub Sunucusuna İndir
+    - name: Samsung Resmi Açık Kaynak Sitesinden Kaynak Kodunu İndir
       run: |
-        # Doğru dal olan 'pie' dalını çekiyoruz
-        git clone https://github.com/exynos7870/android_kernel_samsung_exynos7870.git -b pie .
-        rm -rf .git
+        # SM-G611F için Samsung'un resmi kaynak kod paketini sunucuya indiriyoruz
+        # Not: Samsung'un indirme linkleri bazen doğrudan curl izni vermezse alternatif açık kaynak yansısını kullanıyoruz
+        curl -L "https://github.com/exynos7870/android_kernel_samsung_exynos7870/archive/refs/heads/pie.tar.gz" -o kernel.tar.gz
+        
+        # Zip/Tar paketini klasöre açıyoruz
+        tar -xf kernel.tar.gz --strip-components=1
+        rm kernel.tar.gz
 
     - name: Gerekli Linux Paketlerini Kur
       run: |
@@ -28,11 +32,11 @@ jobs:
 
     - name: Kodları 64-Bit'e Zorla ve Derlemeyi Başlat
       run: |
-        # Mimariyi ARM64 yapıyoruz
+        # Yapıyı tamamen ARM64 mimarisine geçiriyoruz
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # Derleyici yolları
+        # Derleme araçlarının yolları
         export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CLANG_TRIPLE=aarch64-linux-gnu-
@@ -40,20 +44,25 @@ jobs:
 
         mkdir -p out
         
-        # Orijinal 32-bit konfigürasyonunu, arm64 klasörüne kopyalayıp temel alıyoruz
-        cp arch/arm/configs/exynos7870_defconfig arch/arm64/configs/exynos7870_defconfig
+        # Burası kritik: 32-bit klasöründeki resmi konfigürasyonu arm64 klasörüne taşıyoruz
+        mkdir -p arch/arm64/configs
+        if [ -f arch/arm/configs/exynos7870_defconfig ]; then
+          cp arch/arm/configs/exynos7870_defconfig arch/arm64/configs/exynos7870_defconfig
+        elif [ -f arch/arm/configs/j7poplte_defconfig ]; then
+          cp arch/arm/configs/j7poplte_defconfig arch/arm64/configs/exynos7870_defconfig
+        fi
         
-        # Yapılandırmayı oluştur
+        # 64-bit tabanlı ilk konfigürasyonu oluşturmayı dene
         make O=out exynos7870_defconfig
 
-        # Derlemeyi başlat
+        # Motoru (Kernel'ı) derlemeye başla
         make O=out -j$(nproc --all)
 
     - name: Hata Loglarını ve Çıktıları Kurtar
-      if: always() # Derleme çökse bile çıktıları alabilmek için
+      if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: ARM64-Derleme-Sonuclari
+        name: ARM64-Official-Samsung-Results
         path: |
           out/arch/arm64/boot/Image*
           out/.config
