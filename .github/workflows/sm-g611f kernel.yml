@@ -7,28 +7,24 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Kaynağı İndir
+      - name: Gerekli Paketleri Kur
+        run: sudo apt-get update && sudo apt-get install -y bc bison build-essential flex libssl-dev libncurses-dev git
+
+      - name: Kaynak Kodları Klonla
         run: |
-          # Doğrudan indirme linkini kullanıyoruz
-          wget -O kernel.zip "https://drive.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg"
-          unzip kernel.zip -d kernel_src
-      
-      - name: Derleme Ortamını Hazırla
-        run: |
-          sudo apt-get update && sudo apt-get install -y bc bison build-essential flex libssl-dev libncurses-dev
+          # Samsung J7 Prime 2 (Exynos 7870) resmi kaynak kodlarının temiz hali
+          git clone --depth=1 https://github.com/universal7870/android_kernel_samsung_exynos7870.git kernel_src
           git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
 
       - name: Binder64 ve Derleme
         run: |
-          # Samsung'un ZIP dosyasının içindeki klasör ismini kontrol et
-          # Eğer ana dizinde değilse "cd kernel_src/klasor_ismi" yapmalısın
           cd kernel_src
           export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
           
-          # Defconfig'i yükle (Modeline uygun olan)
+          # Cihaz konfigürasyonunu yükle
           make ARCH=arm64 exynos7870-j7refte_defconfig
           
-          # Binder64'ü etkinleştir
+          # 32-bit'i kapat, 64-bit'i aç
           sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/# CONFIG_ANDROID_BINDER_IPC_32BIT is not set/' .config
           echo "CONFIG_ANDROID_BINDER64_PROTOCOL=y" >> .config
           
