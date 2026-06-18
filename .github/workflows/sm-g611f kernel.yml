@@ -8,31 +8,37 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-    - name: Kullanıcının Doğrudan Google Drive Linkinden Resmi Kodu İndir
+    - name: Google Drive Onay Duvarını Aşarak Kodu İndir
       run: |
-        # Onay duvarını aşan doğrudan indirme linkini kullanarak zip dosyasını çekiyoruz
-        curl -L "https://drive.usercontent.google.com/download?id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg&export=download" -o main_samsung.zip
+        # 1. Google'ın büyük dosyalar için çıkardığı o uyarı sayfasından gizli onay kodunu (confirm token) çekiyoruz
+        CONFIRM=$(curl -s -c cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" | grep -o 'confirm=[^&]*' | head -n1)
         
-        # Zip dosyasını açıyoruz
-        mkdir -p samsung_extracted
-        unzip main_samsung.zip -d samsung_extracted || true
-        rm main_samsung.zip
+        # 2. Eğer onay kodu bulunduysa onunla, bulunmadıysa direkt indiriyoruz
+        if [ ! -z "$CONFIRM" ]; then
+          curl -L -b cookies.txt "https://docs.google.com/uc?export=download&${CONFIRM}&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o samsung_kernel.zip
+        else
+          curl -L -b cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o samsung_kernel.zip
+        fi
 
-        # Samsung ana paketinin içindeki gerçek Kernel paketini bulup buraya çıkarıyoruz
-        cd samsung_extracted
-        KERNEL_PACK=$(find . -name "*Kernel*" -o -name "*kernel*")
-        if [ ! -z "$KERNEL_PACK" ]; then
-          if [[ "$KERNEL_PACK" == *.zip ]]; then
-            unzip "$KERNEL_PACK" -d $GITHUB_WORKSPACE/
+        # 3. İndirilen ana zip dosyasını ayıkla
+        mkdir -p extracted
+        unzip samsung_kernel.zip -d extracted || true
+        rm samsung_kernel.zip cookies.txt
+        
+        # 4. Samsung ana paketinin içindeki gerçek "Kernel" paketini bul ve ana dizine aç
+        cd extracted
+        INNER_PACK=$(find . -name "*Kernel*" -o -name "*kernel*")
+        if [ ! -z "$INNER_PACK" ]; then
+          if [[ "$INNER_PACK" == *.zip ]]; then
+            unzip "$INNER_PACK" -d $GITHUB_WORKSPACE/
           else
-            tar -xf "$KERNEL_PACK" -C $GITHUB_WORKSPACE/ || tar -xf "$KERNEL_PACK" --strip-components=1 -C $GITHUB_WORKSPACE/
+            tar -xf "$INNER_PACK" -C $GITHUB_WORKSPACE/ || tar -xf "$INNER_PACK" --strip-components=1 -C $GITHUB_WORKSPACE/
           fi
         else
-          # Eğer alt paket yoksa her şeyi doğrudan ana dizine taşı
           cp -r * $GITHUB_WORKSPACE/
         fi
         cd $GITHUB_WORKSPACE
-        rm -rf samsung_extracted
+        rm -rf extracted
 
     - name: Gerekli Linux Paketlerini Kur
       run: |
@@ -48,11 +54,9 @@ jobs:
 
     - name: Kodları 64-Bit'e Zorla ve Derlemeyi Başlat
       run: |
-        # Yapıyı tamamen ARM64 mimarisine geçiriyoruz
         export ARCH=arm64
         export SUBARCH=arm64
         
-        # Derleme araçlarının yolları
         export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
         export CROSS_COMPILE=aarch64-linux-gnu-
         export CLANG_TRIPLE=aarch64-linux-gnu-
@@ -61,7 +65,7 @@ jobs:
         mkdir -p out
         mkdir -p arch/arm64/configs
         
-        # Klasördeki ilk bulduğu defconfig'i arm64'e kopyala
+        # Orijinal konfigürasyonu bul ve arm64 klasörüne kopyala
         if [ -f arch/arm/configs/exynos7870_g611f_defconfig ]; then
           cp arch/arm/configs/exynos7870_g611f_defconfig arch/arm64/configs/exynos7870_defconfig
         elif [ -f arch/arm/configs/exynos7870_defconfig ]; then
@@ -70,13 +74,11 @@ jobs:
           cp arch/arm/configs/*defconfig arch/arm64/configs/exynos7870_defconfig
         fi
         
-        # 64-bit tabanlı konfigürasyonu oluştur
+        # Defconfig oluştur ve derle
         make O=out exynos7870_defconfig
-
-        # Derlemeyi başlat
         make O=out -j$(nproc --all)
 
-    - name: Hata Loglarını ve Çıktıları Kurtar
+    - name: Hata Loglarını Kurtar
       if: always()
       uses: actions/upload-artifact@v4
       with:
