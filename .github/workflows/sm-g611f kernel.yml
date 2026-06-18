@@ -8,26 +8,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Gerekli Paketleri Kur
-        run: sudo apt-get update && sudo apt-get install -y bc bison build-essential flex libssl-dev libncurses-dev git
+        run: sudo apt-get update && sudo apt-get install -y bc bison build-essential flex libssl-dev libncurses-dev
 
-      - name: Kaynak Kodları Klonla
+      - name: Kaynak Kodları İndir
         run: |
-          # Samsung J7 Prime 2 (Exynos 7870) resmi kaynak kodlarının temiz hali
-          git clone --depth=1 https://github.com/universal7870/android_kernel_samsung_exynos7870.git kernel_src
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
+          # Git clone yerine, doğrudan indirme linkini kullanıyoruz
+          wget -O kernel.tar.gz https://github.com/universal7870/android_kernel_samsung_exynos7870/archive/refs/heads/lineage-18.1.tar.gz
+          mkdir kernel_src
+          tar -xzf kernel.tar.gz -C kernel_src --strip-components=1
 
-      - name: Binder64 ve Derleme
+      - name: Toolchain İndir
+        run: |
+          wget -O toolchain.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/pie-release.tar.gz
+          mkdir toolchain
+          tar -xzf toolchain.tar.gz -C toolchain
+
+      - name: Derleme Başlat
         run: |
           cd kernel_src
           export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
           
-          # Cihaz konfigürasyonunu yükle
-          make ARCH=arm64 exynos7870-j7refte_defconfig
-          
-          # 32-bit'i kapat, 64-bit'i aç
-          sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/# CONFIG_ANDROID_BINDER_IPC_32BIT is not set/' .config
+          # Binder64 Yaması
+          sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/# CONFIG_ANDROID_BINDER_IPC_32BIT is not set/' .config || true
           echo "CONFIG_ANDROID_BINDER64_PROTOCOL=y" >> .config
           
-          # Derlemeyi başlat
+          make ARCH=arm64 exynos7870-j7refte_defconfig
           make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
           
