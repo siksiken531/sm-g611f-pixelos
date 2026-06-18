@@ -1,4 +1,4 @@
-name: J7 Prime 2 Kernel Builder
+name: Samsung Kernel Build
 
 on:
   workflow_dispatch:
@@ -7,22 +7,31 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Git ayarlarını sıfırla
+      - name: Kaynağı İndir
         run: |
-          git config --global http.postBuffer 524288000
-          git config --global core.compression 0
-      - name: Klonlama (Stabil)
+          # Doğrudan indirme linkini kullanıyoruz
+          wget -O kernel.zip "https://drive.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg"
+          unzip kernel.zip -d kernel_src
+      
+      - name: Derleme Ortamını Hazırla
         run: |
-          # 404 hatası almamak için HTTPS yerine doğrudan depoyu hedefliyoruz
-          git clone --depth=1 https://github.com/universal7870/android_kernel_samsung_exynos7870.git kernel
-          git clone --depth=1 https://github.com/AndroidBlobs/device_samsung_on7xreflte.git device
-      - name: Derleme
+          sudo apt-get update && sudo apt-get install -y bc bison build-essential flex libssl-dev libncurses-dev
+          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
+
+      - name: Binder64 ve Derleme
         run: |
-          cd kernel
+          # Samsung'un ZIP dosyasının içindeki klasör ismini kontrol et
+          # Eğer ana dizinde değilse "cd kernel_src/klasor_ismi" yapmalısın
+          cd kernel_src
           export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
-          # Binder64 yapılandırması
+          
+          # Defconfig'i yükle (Modeline uygun olan)
+          make ARCH=arm64 exynos7870-j7refte_defconfig
+          
+          # Binder64'ü etkinleştir
           sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/# CONFIG_ANDROID_BINDER_IPC_32BIT is not set/' .config
           echo "CONFIG_ANDROID_BINDER64_PROTOCOL=y" >> .config
-          make ARCH=arm64 exynos7870-j7refte_defconfig
-          make -j$(nproc)
+          
+          # Derlemeyi başlat
+          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
           
