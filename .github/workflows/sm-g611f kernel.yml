@@ -1,37 +1,60 @@
-name: Samsung Kernel Build
+name: SM-G611F Sıfırdan 64-Bit Kernel Derleyici
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manuel başlatma butonu
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+
     steps:
-      - name: Gerekli Paketleri Kur
-        run: sudo apt-get update && sudo apt-get install -y bc bison build-essential flex libssl-dev libncurses-dev
+    - name: Orijinal Samsung Kernel Kaynak Kodlarını GitHub Sunucusuna İndir
+      run: |
+        git clone https://github.com/exynos7870/android_kernel_samsung_exynos7870.git -b master .
+        # Temiz bir başlangıç için eski git geçmişini silelim
+        rm -rf .git
 
-      - name: Kaynak Kodları İndir
-        run: |
-          # Git clone yerine, doğrudan indirme linkini kullanıyoruz
-          wget -O kernel.tar.gz https://github.com/universal7870/android_kernel_samsung_exynos7870/archive/refs/heads/lineage-18.1.tar.gz
-          mkdir kernel_src
-          tar -xzf kernel.tar.gz -C kernel_src --strip-components=1
+    - name: Gerekli Linux Paketlerini Kur
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libelf-dev libssl-dev bison flex git rsync libncurses5-dev tcl crossbuild-essential-arm64
 
-      - name: Toolchain İndir
-        run: |
-          wget -O toolchain.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/refs/heads/pie-release.tar.gz
-          mkdir toolchain
-          tar -xzf toolchain.tar.gz -C toolchain
+    - name: Google AOSP Clang Derleyicisini Kur (64-Bit İçin)
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/clang
+        cd $GITHUB_WORKSPACE/clang
+        curl -LO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android10-release/clang-r353395c.tar.gz
+        tar -xf clang-r353395c.tar.gz
 
-      - name: Derleme Başlat
-        run: |
-          cd kernel_src
-          export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
-          
-          # Binder64 Yaması
-          sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/# CONFIG_ANDROID_BINDER_IPC_32BIT is not set/' .config || true
-          echo "CONFIG_ANDROID_BINDER64_PROTOCOL=y" >> .config
-          
-          make ARCH=arm64 exynos7870-j7refte_defconfig
-          make -j$(nproc) ARCH=arm64 CROSS_COMPILE=$GITHUB_WORKSPACE/toolchain/bin/aarch64-linux-android-
+    - name: Kodları 64-Bit'e Zorla ve Derlemeyi Başlat
+      run: |
+        # Mimariyi ARM64 yapıyoruz
+        export ARCH=arm64
+        export SUBARCH=arm64
+        
+        # Derleyici yolları
+        export PATH=$GITHUB_WORKSPACE/clang/bin:$PATH
+        export CROSS_COMPILE=aarch64-linux-gnu-
+        export CLANG_TRIPLE=aarch64-linux-gnu-
+        export CC=clang
+
+        mkdir -p out
+        
+        # Orijinal 32-bit konfigürasyonunu, arm64 klasörüne kopyalayıp temel alıyoruz
+        cp arch/arm/configs/exynos7870_defconfig arch/arm64/configs/exynos7870_defconfig
+        
+        # Yapılandırmayı oluştur
+        make O=out exynos7870_defconfig
+
+        # Derlemeyi başlat
+        make O=out -j$(nproc --all)
+
+    - name: Hata Loglarını ve Çıktıları Kurtar
+      if: always() # Derleme çökse bile çıktıları alabilmek için
+      uses: actions/upload-artifact@v4
+      with:
+        name: ARM64-Derleme-Sonuclari
+        path: |
+          out/arch/arm64/boot/Image*
+          out/.config
           
