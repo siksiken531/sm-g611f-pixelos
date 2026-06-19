@@ -17,7 +17,7 @@ jobs:
           libncurses-dev gcc-aarch64-linux-gnu unzip python3-pip
           pip install gdown
 
-      - name: Download Kernel Source from Google Drive
+      - name: Download Kernel Source
         run: |
           FILE_ID="1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg"
           gdown "https://drive.google.com/uc?id=$FILE_ID" -O source.zip
@@ -25,42 +25,28 @@ jobs:
       - name: Extract Kernel Source
         run: |
           unzip source.zip -d kernel_source
-          ls -la kernel_source/
-          # Kernel.tar.gz dosyasını aç
-          tar -xzf kernel_source/Kernel.tar.gz -C kernel_source/
-          # Oluşan klasörü bul
-          KERNEL_DIR=$(find kernel_source -maxdepth 1 -type d -name "*kernel*" -o -name "*Kernel*" | head -1)
-          echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
-          ls -la $KERNEL_DIR
+          cd kernel_source
+          tar -xzf Kernel.tar.gz
+          ls -la
 
       - name: Build Kernel (64-bit)
         run: |
-          cd ${{ env.KERNEL_DIR }}
+          cd kernel_source/Kernel
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          # Defconfig dosyasını bul
-          if [ -f arch/arm64/configs/exynos7870_defconfig ]; then
-            make exynos7870_defconfig
-          else
-            echo "Defconfig bulunamadı! Mevcut config'leri listeliyorum:"
-            ls arch/arm64/configs/
-            exit 1
-          fi
-          # Treble bayraklarını ekle
+          make exynos7870_defconfig
           scripts/config --enable CONFIG_ANDROID_BINDER_IPC
           scripts/config --enable CONFIG_ANDROID_VENDOR_OEM_UNLOCK_SUPPORT
           scripts/config --enable CONFIG_ION
           scripts/config --enable CONFIG_SYNC_FILE
-          # Derle
           make -j$(nproc) Image
           make -j$(nproc) dtbs
 
       - name: Package Kernel
         run: |
           mkdir -p release
-          KERNEL_DIR=${{ env.KERNEL_DIR }}
-          cp $KERNEL_DIR/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
-          cp $KERNEL_DIR/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
+          cp kernel_source/Kernel/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
+          cp kernel_source/Kernel/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
           cd release
           zip -r ../SM-G611F_64bit_Kernel.zip *
           cd ..
