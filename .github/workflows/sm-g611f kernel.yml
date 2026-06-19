@@ -5,7 +5,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     permissions:
       contents: write
 
@@ -32,7 +32,6 @@ jobs:
 
       - name: Find and Build Kernel
         run: |
-          # Kernel klasörünü bul
           KERNEL_DIR=$(find kernel_source -maxdepth 2 -type d -iname "*kernel*" | head -1)
           if [ -z "$KERNEL_DIR" ]; then
             echo "❌ Kernel klasörü bulunamadı!"
@@ -43,7 +42,6 @@ jobs:
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           
-          # Defconfig dosyasını bul
           DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | head -1)
           if [ -z "$DEFCONFIG" ]; then
             echo "❌ Hiçbir defconfig bulunamadı!"
@@ -52,18 +50,13 @@ jobs:
           echo "✅ Bulunan defconfig: $DEFCONFIG"
           make $(basename $DEFCONFIG)
           
-          # Treble bayraklarını ekle
           scripts/config --enable CONFIG_ANDROID_BINDER_IPC
           scripts/config --enable CONFIG_ANDROID_VENDOR_OEM_UNLOCK_SUPPORT
           scripts/config --enable CONFIG_ION
           scripts/config --enable CONFIG_SYNC_FILE
           
-          # DTC hatasını çözmek için: sistem dtc'sini kullan
-          export HOSTLDFLAGS="-fcommon"
-          export DTC="dtc"
-          
-          # Derle
-          make -j$(nproc) Image dtbs
+          make -j$(nproc) Image
+          make -j$(nproc) dtbs
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
 
       - name: Package Kernel
