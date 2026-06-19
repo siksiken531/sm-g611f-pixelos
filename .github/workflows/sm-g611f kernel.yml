@@ -1,4 +1,4 @@
-name: Build Kernel from Google Drive
+name: Build 64-bit Kernel for SM-G611F
 
 on:
   workflow_dispatch:
@@ -19,33 +19,50 @@ jobs:
 
       - name: Download Kernel Source from Google Drive
         run: |
-          # Google Drive dosya ID'si
           FILE_ID="1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg"
           gdown "https://drive.google.com/uc?id=$FILE_ID" -O source.zip
 
-      - name: Extract and Build Kernel
+      - name: Extract Kernel Source
         run: |
           unzip source.zip -d kernel_source
-          cd kernel_source/*/kernel/ || cd kernel_source/*/
+          ls -la kernel_source/
+          # Kernel.tar.gz dosyasını aç
+          tar -xzf kernel_source/Kernel.tar.gz -C kernel_source/
+          ls -la kernel_source/
+
+      - name: Build Kernel (64-bit)
+        run: |
+          cd kernel_source/Kernel
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          make exynos7870_defconfig
+          # Defconfig dosyasını bul
+          if [ -f arch/arm64/configs/exynos7870_defconfig ]; then
+            make exynos7870_defconfig
+          else
+            echo "Defconfig bulunamadı! Mevcut config'leri listeliyorum:"
+            ls arch/arm64/configs/
+            exit 1
+          fi
+          # Treble bayraklarını ekle
           scripts/config --enable CONFIG_ANDROID_BINDER_IPC
           scripts/config --enable CONFIG_ANDROID_VENDOR_OEM_UNLOCK_SUPPORT
+          scripts/config --enable CONFIG_ION
+          scripts/config --enable CONFIG_SYNC_FILE
+          # Derle
           make -j$(nproc) Image
           make -j$(nproc) dtbs
 
       - name: Package Kernel
         run: |
           mkdir -p release
-          cp kernel_source/*/kernel/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
-          cp kernel_source/*/kernel/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
+          cp kernel_source/Kernel/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
+          cp kernel_source/Kernel/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
           cd release
-          zip -r ../SM-G611F_Treble_Kernel.zip *
+          zip -r ../SM-G611F_64bit_Kernel.zip *
           cd ..
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SM-G611F_Treble_Kernel
-          path: SM-G611F_Treble_Kernel.zip
+          name: SM-G611F_64bit_Kernel
+          path: SM-G611F_64bit_Kernel.zip
