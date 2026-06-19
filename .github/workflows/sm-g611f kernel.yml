@@ -1,4 +1,4 @@
-name: Build 64-bit Kernel for SM-G611F
+name: Build ARM64+Treble Kernel
 
 on:
   workflow_dispatch:
@@ -14,72 +14,57 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y git build-essential flex bison bc libelf-dev libssl-dev \
-          libncurses-dev gcc-aarch64-linux-gnu unzip python3-pip device-tree-compiler
+          libncurses-dev gcc-aarch64-linux-gnu unzip device-tree-compiler wget python3-pip
           pip install gdown
 
       - name: Download Kernel Source
         run: |
-          FILE_ID="1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg"
-          gdown "https://drive.google.com/uc?id=$FILE_ID" -O source.zip
-
-      - name: Extract Kernel Source
-        run: |
-          unzip source.zip -d kernel_source
+          gdown "https://drive.google.com/uc?id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -O kernel.zip
+          unzip kernel.zip -d kernel_source
           cd kernel_source
           tar -xzf Kernel.tar.gz
-          echo "=== Klasör içeriği ==="
           ls -la
 
-      - name: Find and Build Kernel
+      - name: Find Kernel Directory
+        id: find_kernel
         run: |
           KERNEL_DIR=$(find kernel_source -maxdepth 2 -type d -iname "*kernel*" | head -1)
           if [ -z "$KERNEL_DIR" ]; then
-            echo "❌ Kernel klasörü bulunamadı!"
+            echo "Kernel klasörü bulunamadı!"
             exit 1
           fi
-          echo "✅ Bulunan kernel klasörü: $KERNEL_DIR"
-          cd $KERNEL_DIR
+          echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
+          echo "Bulunan klasör: $KERNEL_DIR"
+
+      - name: Configure and Build Kernel
+        run: |
+          cd ${{ env.KERNEL_DIR }}
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          
-          DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | head -1)
-          if [ -z "$DEFCONFIG" ]; then
-            echo "❌ Hiçbir defconfig bulunamadı!"
-            exit 1
-          fi
-          echo "✅ Bulunan defconfig: $DEFCONFIG"
-          make $(basename $DEFCONFIG)
-          
+          make on7xreflte_01_defconfig
           scripts/config --enable CONFIG_ANDROID_BINDER_IPC
           scripts/config --enable CONFIG_ANDROID_VENDOR_OEM_UNLOCK_SUPPORT
+          scripts/config --enable CONFIG_ANDROID_HIDL_IPC
           scripts/config --enable CONFIG_ION
           scripts/config --enable CONFIG_SYNC_FILE
-          
+          scripts/config --enable CONFIG_DM_VERITY
+          scripts/config --enable CONFIG_DM_VERITY_FEC
+          make olddefconfig
           make -j$(nproc) Image
           make -j$(nproc) dtbs
-          echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
 
       - name: Package Kernel
         run: |
+          cd ${{ env.KERNEL_DIR }}
           mkdir -p release
-          KERNEL_DIR="${{ env.KERNEL_DIR }}"
-          if [ -f "$KERNEL_DIR/arch/arm64/boot/Image" ]; then
-            cp $KERNEL_DIR/arch/arm64/boot/Image release/
-            echo "✅ Image dosyası kopyalandı"
-          else
-            echo "❌ Image dosyası bulunamadı!"
-            exit 1
-          fi
-          if [ -d "$KERNEL_DIR/arch/arm64/boot/dts" ]; then
-            cp $KERNEL_DIR/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || true
-            echo "✅ DTB dosyaları kopyalandı"
-          fi
+          cp arch/arm64/boot/Image release/
+          cp arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || true
           cd release
-          zip -r ../SM-G611F_64bit_Kernel.zip *
-          cd ..
+          zip -r ../../SM-G611F_64bit_Treble_Kernel.zip *
+          cd ../..
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SM-G611F_64bit_Kernel
-          path: SM-G611F_64bit_Kernel.zip
+          name: SM-G611F_64bit_Treble_Kernel
+          path: SM-G611F_64bit_Treble_Kernel.zip
