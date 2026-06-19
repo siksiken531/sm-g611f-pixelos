@@ -58,10 +58,11 @@ jobs:
           scripts/config --enable CONFIG_ION
           scripts/config --enable CONFIG_SYNC_FILE
           
-          # Hata çözümü: dtc çakışmasını gider
+          # DTC hatasını çözmek için: sistem dtc'sini kullan
           export HOSTLDFLAGS="-fcommon"
+          export DTC="dtc"
           
-          # Derle (dtc'yi sistemdekini kullan)
+          # Derle
           make -j$(nproc) Image dtbs
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
 
