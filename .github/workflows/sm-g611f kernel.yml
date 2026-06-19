@@ -27,11 +27,22 @@ jobs:
           unzip source.zip -d kernel_source
           cd kernel_source
           tar -xzf Kernel.tar.gz
+          echo "=== Klasör içeriği ==="
           ls -la
+          echo "=== Klasör yapısı ==="
+          find . -maxdepth 2 -type d
 
-      - name: Build Kernel (64-bit)
+      - name: Find and Build Kernel
         run: |
-          cd kernel_source/Kernel
+          # Kernel klasörünü bul (büyük/küçük harf duyarsız)
+          KERNEL_DIR=$(find kernel_source -maxdepth 2 -type d -iname "*kernel*" | head -1)
+          if [ -z "$KERNEL_DIR" ]; then
+            echo "❌ Kernel klasörü bulunamadı! Tüm klasörleri listeliyorum:"
+            find kernel_source -type d
+            exit 1
+          fi
+          echo "✅ Bulunan kernel klasörü: $KERNEL_DIR"
+          cd $KERNEL_DIR
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           make exynos7870_defconfig
@@ -41,12 +52,23 @@ jobs:
           scripts/config --enable CONFIG_SYNC_FILE
           make -j$(nproc) Image
           make -j$(nproc) dtbs
+          echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
 
       - name: Package Kernel
         run: |
           mkdir -p release
-          cp kernel_source/Kernel/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
-          cp kernel_source/Kernel/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
+          KERNEL_DIR="${{ env.KERNEL_DIR }}"
+          if [ -f "$KERNEL_DIR/arch/arm64/boot/Image" ]; then
+            cp $KERNEL_DIR/arch/arm64/boot/Image release/
+            echo "✅ Image dosyası kopyalandı"
+          else
+            echo "❌ Image dosyası bulunamadı!"
+            exit 1
+          fi
+          if [ -d "$KERNEL_DIR/arch/arm64/boot/dts" ]; then
+            cp $KERNEL_DIR/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || true
+            echo "✅ DTB dosyaları kopyalandı"
+          fi
           cd release
           zip -r ../SM-G611F_64bit_Kernel.zip *
           cd ..
