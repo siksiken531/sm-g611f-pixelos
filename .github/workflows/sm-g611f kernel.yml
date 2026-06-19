@@ -28,11 +28,14 @@ jobs:
           ls -la kernel_source/
           # Kernel.tar.gz dosyasını aç
           tar -xzf kernel_source/Kernel.tar.gz -C kernel_source/
-          ls -la kernel_source/
+          # Oluşan klasörü bul
+          KERNEL_DIR=$(find kernel_source -maxdepth 1 -type d -name "*kernel*" -o -name "*Kernel*" | head -1)
+          echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
+          ls -la $KERNEL_DIR
 
       - name: Build Kernel (64-bit)
         run: |
-          cd kernel_source/Kernel
+          cd ${{ env.KERNEL_DIR }}
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
           # Defconfig dosyasını bul
@@ -55,8 +58,9 @@ jobs:
       - name: Package Kernel
         run: |
           mkdir -p release
-          cp kernel_source/Kernel/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
-          cp kernel_source/Kernel/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
+          KERNEL_DIR=${{ env.KERNEL_DIR }}
+          cp $KERNEL_DIR/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
+          cp $KERNEL_DIR/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
           cd release
           zip -r ../SM-G611F_64bit_Kernel.zip *
           cd ..
