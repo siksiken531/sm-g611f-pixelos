@@ -29,27 +29,36 @@ jobs:
           tar -xzf Kernel.tar.gz
           echo "=== Klasör içeriği ==="
           ls -la
-          echo "=== Klasör yapısı ==="
-          find . -maxdepth 2 -type d
 
       - name: Find and Build Kernel
         run: |
-          # Kernel klasörünü bul (büyük/küçük harf duyarsız)
+          # Kernel klasörünü bul
           KERNEL_DIR=$(find kernel_source -maxdepth 2 -type d -iname "*kernel*" | head -1)
           if [ -z "$KERNEL_DIR" ]; then
-            echo "❌ Kernel klasörü bulunamadı! Tüm klasörleri listeliyorum:"
-            find kernel_source -type d
+            echo "❌ Kernel klasörü bulunamadı!"
             exit 1
           fi
           echo "✅ Bulunan kernel klasörü: $KERNEL_DIR"
           cd $KERNEL_DIR
           export ARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          make exynos7870_defconfig
+          
+          # Defconfig dosyasını bul
+          DEFCONFIG=$(find arch/arm64/configs -name "*defconfig" | head -1)
+          if [ -z "$DEFCONFIG" ]; then
+            echo "❌ Hiçbir defconfig bulunamadı!"
+            exit 1
+          fi
+          echo "✅ Bulunan defconfig: $DEFCONFIG"
+          make $(basename $DEFCONFIG)
+          
+          # Treble bayraklarını ekle
           scripts/config --enable CONFIG_ANDROID_BINDER_IPC
           scripts/config --enable CONFIG_ANDROID_VENDOR_OEM_UNLOCK_SUPPORT
           scripts/config --enable CONFIG_ION
           scripts/config --enable CONFIG_SYNC_FILE
+          
+          # Derle
           make -j$(nproc) Image
           make -j$(nproc) dtbs
           echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
