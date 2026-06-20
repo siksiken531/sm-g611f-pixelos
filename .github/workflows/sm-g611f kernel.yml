@@ -19,7 +19,7 @@ jobs:
           libelf-dev libssl-dev dwarves
 
     # ============================================
-    # 2. KERNEL KAYNAĞI (SAMSUNG ÖZEL)
+    # 2. KERNEL KAYNAĞI
     # ============================================
     - name: 📥 Download Samsung Kernel
       run: |
@@ -49,7 +49,9 @@ jobs:
           rmdir kernel
         fi
         
-        echo "✅ Kaynaklar hazır!"
+        # TÜM config dosyalarını bul ve listele
+        echo "🔍 Tüm config dosyaları:"
+        find . -name "*defconfig" -o -name "*_defconfig" | head -20
 
     # ============================================
     # 3. ARM64 TOOLCHAIN
@@ -64,7 +66,7 @@ jobs:
         echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (SAMSUNG ÖZEL YÖNTEM)
+    # 4. KERNEL DERLE (OTOMATİK CONFIG BUL)
     # ============================================
     - name: 🏗️ Build Universal Kernel
       run: |
@@ -72,11 +74,41 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # 1. MEVCUT config'i DOĞRUDAN KULLAN
-        echo "📂 Config: arch/arm64/configs/on7xref1te_01_defconfig"
-        cp arch/arm64/configs/on7xref1te_01_defconfig .config
+        # OTOMATİK CONFIG BUL
+        CONFIG_FILE=""
         
-        # 2. SM-G611F ve Treble ayarlarını EKLE
+        # Önce SM-G611F özel config ara
+        for f in $(find . -name "*g611f*defconfig" -o -name "*7870*defconfig"); do
+          if [ -f "$f" ]; then
+            CONFIG_FILE="$f"
+            break
+          fi
+        done
+        
+        # Yoksa on7x config'ini ara
+        if [ -z "$CONFIG_FILE" ]; then
+          for f in $(find . -name "*on7x*defconfig"); do
+            if [ -f "$f" ]; then
+              CONFIG_FILE="$f"
+              break
+            fi
+          done
+        fi
+        
+        # Hiçbiri yoksa ilk bulduğunu al
+        if [ -z "$CONFIG_FILE" ]; then
+          CONFIG_FILE=$(find . -name "*defconfig" | head -1)
+        fi
+        
+        if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+          echo "❌ Hiçbir defconfig bulunamadı!"
+          exit 1
+        fi
+        
+        echo "✅ Kullanılan config: $CONFIG_FILE"
+        cp "$CONFIG_FILE" .config
+        
+        # Treble ayarlarını ekle
         cat >> .config <<'EOF'
         CONFIG_MACH_EXYNOS7870=y
         CONFIG_MACH_G611F=y
@@ -92,17 +124,14 @@ jobs:
         CONFIG_OVERLAY_FS=y
         CONFIG_HZ_300=y
         CONFIG_PREEMPT=y
-        CONFIG_ENERGY_AWARE_SCHEDULING=y
-        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
-        # 3. Config'i düzenle (eski ayarları temizle)
+        # Config'i düzenle
         make oldconfig
         
-        # 4. Derle (Image.gz ve dtbs)
+        # Derle
         make -j$(nproc) Image.gz dtbs
         
-        # 5. Kontrol
         if [ ! -f "arch/arm64/boot/Image.gz" ]; then
           echo "❌ Derleme başarısız!"
           exit 1
