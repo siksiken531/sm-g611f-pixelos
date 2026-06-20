@@ -1,4 +1,4 @@
-name: 🔥 SM-G611F Universal PixelOS Kernel
+name: 🔥 SM-G611F Universal Kernel (Samsung Özel)
 
 on:
   workflow_dispatch:
@@ -34,7 +34,6 @@ jobs:
         
         cd kernel-source
         
-        # TAR.GZ'leri aç
         if [ -f "Kernel.tar.gz" ]; then
           tar -xzf Kernel.tar.gz
         fi
@@ -43,18 +42,15 @@ jobs:
           tar -xzf Platform.tar.gz
         fi
         
-        # Klasör düzelt
         if [ -d "kernel" ]; then
           mv kernel/* .
           rmdir kernel
         fi
         
-        # TÜM config dosyalarını bul ve listele
-        echo "🔍 Tüm config dosyaları:"
-        find . -name "*defconfig" -o -name "*_defconfig" | head -20
+        echo "✅ Kaynaklar hazır!"
 
     # ============================================
-    # 3. ARM64 TOOLCHAIN
+    # 3. TOOLCHAIN
     # ============================================
     - name: 🔧 Setup Toolchain
       run: |
@@ -66,52 +62,28 @@ jobs:
         echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (OTOMATİK CONFIG BUL)
+    # 4. KERNEL DERLE (SAMSUNG ÖZEL)
     # ============================================
-    - name: 🏗️ Build Universal Kernel
+    - name: 🏗️ Build Kernel
       run: |
         cd kernel-source
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # OTOMATİK CONFIG BUL
-        CONFIG_FILE=""
-        
-        # Önce SM-G611F özel config ara
-        for f in $(find . -name "*g611f*defconfig" -o -name "*7870*defconfig"); do
-          if [ -f "$f" ]; then
-            CONFIG_FILE="$f"
-            break
-          fi
-        done
-        
-        # Yoksa on7x config'ini ara
+        # Config dosyasını bul
+        CONFIG_FILE=$(find . -name "on7xreflte_01_defconfig" | head -1)
         if [ -z "$CONFIG_FILE" ]; then
-          for f in $(find . -name "*on7x*defconfig"); do
-            if [ -f "$f" ]; then
-              CONFIG_FILE="$f"
-              break
-            fi
-          done
-        fi
-        
-        # Hiçbiri yoksa ilk bulduğunu al
-        if [ -z "$CONFIG_FILE" ]; then
-          CONFIG_FILE=$(find . -name "*defconfig" | head -1)
-        fi
-        
-        if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
-          echo "❌ Hiçbir defconfig bulunamadı!"
+          echo "❌ Config bulunamadı!"
           exit 1
         fi
         
-        echo "✅ Kullanılan config: $CONFIG_FILE"
+        echo "✅ Config: $CONFIG_FILE"
+        
+        # Config'i kopyala
         cp "$CONFIG_FILE" .config
         
         # Treble ayarlarını ekle
         cat >> .config <<'EOF'
-        CONFIG_MACH_EXYNOS7870=y
-        CONFIG_MACH_G611F=y
         CONFIG_ANDROID_BINDER_IPC=y
         CONFIG_ANDROID_BINDERFS=y
         CONFIG_ANDROID_VENDOR=y
@@ -124,12 +96,12 @@ jobs:
         CONFIG_OVERLAY_FS=y
         CONFIG_HZ_300=y
         CONFIG_PREEMPT=y
+        CONFIG_ENERGY_AWARE_SCHEDULING=y
+        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
-        # Config'i düzenle
-        make oldconfig
-        
-        # Derle
+        # SAMSUNG ÖZEL: Doğrudan derle (oldconfig yok!)
+        echo "📂 Derleme başlıyor..."
         make -j$(nproc) Image.gz dtbs
         
         if [ ! -f "arch/arm64/boot/Image.gz" ]; then
@@ -138,9 +110,10 @@ jobs:
         fi
         
         echo "✅ Derleme başarılı!"
+        ls -lh arch/arm64/boot/Image.gz
 
     # ============================================
-    # 5. BOOT.IMG OLUŞTUR
+    # 5. BOOT.IMG
     # ============================================
     - name: 📦 Create Boot.img
       run: |
