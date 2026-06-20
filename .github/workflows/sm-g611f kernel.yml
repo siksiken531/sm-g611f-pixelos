@@ -8,17 +8,18 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     # ============================================
-    # 1. ORTAM HAZIRLIĞI
+    # 1. ORTAM HAZIRLIĞI (EKSTRA PAKETLER EKLENDİ)
     # ============================================
     - name: ⚡ Setup Environment
       run: |
         sudo apt update
         sudo apt install -y git build-essential flex bison bc \
           zip curl python3-pip libssl-dev device-tree-compiler \
-          gcc-aarch64-linux-gnu
+          gcc-aarch64-linux-gnu make gcc libncurses5-dev \
+          libelf-dev libssl-dev dwarves
 
     # ============================================
-    # 2. KERNEL KAYNAĞI
+    # 2. KERNEL KAYNAĞI (HATA KONTROLÜ EKLENDİ)
     # ============================================
     - name: 📥 Download Samsung Kernel
       run: |
@@ -32,7 +33,30 @@ jobs:
         fi
         
         cd kernel-source
-        [ -d "kernel" ] && mv kernel/* . && rmdir kernel
+        
+        # TAR.GZ'leri aç
+        if [ -f "Kernel.tar.gz" ]; then
+          tar -xzf Kernel.tar.gz
+        fi
+        
+        if [ -f "Platform.tar.gz" ]; then
+          tar -xzf Platform.tar.gz
+        fi
+        
+        # Klasör yapısını düzelt
+        if [ -d "kernel" ]; then
+          mv kernel/* .
+          rmdir kernel
+        fi
+        
+        # Makefile var mı kontrol et
+        if [ ! -f "Makefile" ]; then
+          echo "❌ Makefile bulunamadı! Kaynak yapısı hatalı."
+          ls -la
+          exit 1
+        fi
+        
+        echo "✅ Kaynaklar hazır!"
 
     # ============================================
     # 3. ARM64 TOOLCHAIN
@@ -41,10 +65,13 @@ jobs:
       run: |
         cd kernel-source
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
+        export PATH=$(pwd)/toolchain/bin:$PATH
         echo "PATH=$(pwd)/toolchain/bin:$PATH" >> $GITHUB_ENV
+        echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
+        echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (TÜM PIXELOS GSI'LAR İÇİN)
+    # 4. KERNEL DERLE (HATA AYIKLAMALI)
     # ============================================
     - name: 🏗️ Build Universal Kernel
       run: |
@@ -52,42 +79,44 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # Config
+        # Config dosyalarını listele
+        echo "📂 Mevcut defconfig'ler:"
+        find arch/arm64/configs -name "*defconfig" 2>/dev/null || echo "❌ Hiç config yok!"
+        
+        # Uygun config'i bul
         if [ -f "arch/arm64/configs/exynos7870_g611f_defconfig" ]; then
           make exynos7870_g611f_defconfig
         elif [ -f "arch/arm64/configs/exynos7870_defconfig" ]; then
           make exynos7870_defconfig
-        else
+        elif [ -f "arch/arm64/configs/defconfig" ]; then
           make defconfig
+        else
+          echo "❌ Hiçbir defconfig bulunamadı!"
+          exit 1
         fi
         
-        # PixelOS GSI uyumluluk bayrakları
+        # Treble bayrakları
         cat >> .config <<'EOF'
-        # Treble zorunlu (GSI için olmazsa olmaz)
         CONFIG_ANDROID_BINDER_IPC=y
         CONFIG_ANDROID_BINDERFS=y
         CONFIG_ANDROID_VENDOR=y
         CONFIG_ANDROID_TREBLE=y
         CONFIG_ARM64_4K_PAGES=y
         CONFIG_ARM64_16K_PAGES=n
-        
-        # PixelOS GSI için gerekli
         CONFIG_ION=y
         CONFIG_SYNC_FILE=y
-        CONFIG_DM_ANDROID=y
-        CONFIG_OVERLAY_FS=y
-        CONFIG_HZ_300=y
-        CONFIG_PREEMPT=y
-        
-        # Performans
-        CONFIG_ENERGY_AWARE_SCHEDULING=y
-        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
         # Derle
         make -j$(nproc) Image.gz dtbs
         
-        [ -f "arch/arm64/boot/Image.gz" ] || exit 1
+        # Derleme kontrolü
+        if [ ! -f "arch/arm64/boot/Image.gz" ]; then
+          echo "❌ Derleme başarısız! Image.gz oluşmadı."
+          exit 1
+        fi
+        
+        echo "✅ Derleme başarılı!"
 
     # ============================================
     # 5. BOOT.IMG OLUŞTUR
@@ -98,12 +127,17 @@ jobs:
         
         # Basit boot.img oluştur
         dd if=/dev/zero of=boot-package/boot.img bs=1M count=32
-        dd if=kernel-source/arch/arm64/boot/Image.gz of=boot-package/boot.img bs=4096 seek=2048
+        dd if=kernel-source/arch/arm64/boot/Image.gz of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
         
-        # DTB ekle
-        for dtb in kernel-source/arch/arm64/boot/dts/*.dtb; do
-          [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096
-        done
+        # DTB'leri ekle
+        if [ -d "kernel-source/arch/arm64/boot/dts" ]; then
+          for dtb in kernel-source/arch/arm64/boot/dts/*.dtb; do
+            [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096 conv=notrunc
+          done
+        fi
+        
+        echo "✅ boot.img oluşturuldu:"
+        ls -lh boot-package/boot.img
 
     # ============================================
     # 6. ORANGEFOX PAKETİ
@@ -162,6 +196,8 @@ jobs:
         cd ofox-package
         zip -r9 ../SM-G611F_Universal_Kernel_$(date +%Y%m%d_%H%M).zip *
         cd ..
+        
+        echo "✅ OrangeFox ZIP oluşturuldu!"
 
     # ============================================
     # 7. SONUÇLARI YAYINLA
