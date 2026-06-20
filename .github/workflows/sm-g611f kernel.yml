@@ -50,6 +50,7 @@ jobs:
         fi
         
         echo "✅ Kaynaklar hazır!"
+        ls -la arch/arm64/configs/ | head -20
 
     # ============================================
     # 3. ARM64 TOOLCHAIN
@@ -64,7 +65,7 @@ jobs:
         echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (MEVCUT CONFIG İLE)
+    # 4. KERNEL DERLE (DOĞRU YOL İLE)
     # ============================================
     - name: 🏗️ Build Universal Kernel
       run: |
@@ -72,9 +73,14 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # MEVCUT config'i kullan (on7xref1te_01)
-        echo "📂 Kullanılan config: on7xref1te_01_defconfig"
-        make on7xref1te_01_defconfig
+        # Config dosyasını doğrudan kullan
+        echo "📂 Kullanılan config: arch/arm64/configs/on7xref1te_01_defconfig"
+        
+        # Önce varsayılan config'i oluştur
+        make defconfig
+        
+        # Sonra on7xref1te_01_defconfig'teki ayarları ekle
+        cat arch/arm64/configs/on7xref1te_01_defconfig >> .config
         
         # SM-G611F ve Treble için özel ayarlar
         cat >> .config <<'EOF'
@@ -105,6 +111,9 @@ jobs:
         CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
+        # Eski config'leri temizle ve yeniden oluştur
+        make olddefconfig
+        
         # Derle
         make -j$(nproc) Image.gz dtbs
         
@@ -130,6 +139,8 @@ jobs:
             [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096 conv=notrunc
           done
         fi
+        
+        echo "✅ boot.img oluşturuldu!"
 
     # ============================================
     # 6. ORANGEFOX PAKETİ
