@@ -52,7 +52,7 @@ jobs:
         echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
         echo "ARCH=arm64" >> $GITHUB_ENV
 
-    - name: 🏗️ Build Kernel (Samsung Out)
+    - name: 🏗️ Build Kernel
       run: |
         cd kernel-source
         export ARCH=arm64
@@ -67,11 +67,16 @@ jobs:
         
         echo "✅ Config: $CONFIG_FILE"
         
-        # OUT klasörü ile derle
-        echo "📂 OUT klasörü ile derleniyor..."
-        make O=out "$CONFIG_FILE"
+        # 1. OUT klasörünü oluştur
+        echo "📂 OUT klasörü oluşturuluyor..."
+        mkdir -p out
         
-        # Treble ayarlarını ekle
+        # 2. Config'i doğrudan out/.config'e kopyala
+        echo "📂 Config kopyalanıyor..."
+        cp "$CONFIG_FILE" out/.config
+        
+        # 3. Treble ayarlarını ekle
+        echo "📂 Treble ayarları ekleniyor..."
         cat >> out/.config <<'EOF'
         CONFIG_ANDROID_BINDER_IPC=y
         CONFIG_ANDROID_BINDERFS=y
@@ -89,10 +94,15 @@ jobs:
         CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
-        # Derle
+        # 4. Config'i düzenle
+        echo "📂 Config düzenleniyor..."
+        make O=out oldconfig
+        
+        # 5. Derle
+        echo "📂 Derleme başlıyor..."
         make O=out -j$(nproc) Image.gz dtbs
         
-        # Kontrol
+        # 6. Kontrol
         if [ -f "out/arch/arm64/boot/Image.gz" ]; then
           echo "✅ Derleme başarılı!"
           ls -lh out/arch/arm64/boot/Image.gz
