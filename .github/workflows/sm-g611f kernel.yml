@@ -1,4 +1,4 @@
-name: 🔥 SM-G611F Kernel Builder (Auto)
+name: 🔥 SM-G611F Kernel (Direct Make)
 
 on:
   workflow_dispatch:
@@ -48,8 +48,6 @@ jobs:
         fi
         
         echo "✅ Kaynaklar hazır!"
-        echo "📂 Klasör yapısı:"
-        ls -la | head -20
 
     # ============================================
     # 3. TOOLCHAIN
@@ -64,7 +62,7 @@ jobs:
         echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (build.sh VAR MI?)
+    # 4. KERNEL DERLE (DİREKT MAKE)
     # ============================================
     - name: 🏗️ Build Kernel
       run: |
@@ -72,22 +70,17 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # 1. Config dosyasını bul
-        echo "🔍 Config dosyası aranıyor..."
+        # Config'i bul ve kopyala
         CONFIG_FILE=$(find . -name "on7xreflte_01_defconfig" | head -1)
         if [ -z "$CONFIG_FILE" ]; then
-          CONFIG_FILE=$(find . -name "*defconfig" | head -1)
-        fi
-        
-        if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
-          echo "❌ Hiçbir config dosyası bulunamadı!"
+          echo "❌ Config bulunamadı!"
           exit 1
         fi
         
         echo "✅ Config: $CONFIG_FILE"
         cp "$CONFIG_FILE" .config
         
-        # 2. Treble ayarlarını ekle
+        # Treble ekle
         echo "📂 Treble ayarları ekleniyor..."
         cat >> .config <<'EOF'
         CONFIG_ANDROID_BINDER_IPC=y
@@ -106,62 +99,56 @@ jobs:
         CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
-        # 3. build.sh VAR MI KONTROL ET
-        echo "🔍 build.sh kontrol ediliyor..."
-        if [ -f "build.sh" ]; then
-          echo "✅ build.sh bulundu! Çalıştırılıyor..."
-          chmod +x build.sh
-          ./build.sh
-        else
-          echo "⚠️ build.sh yok! Standart make ile deneniyor..."
-          
-          # Makefile hedeflerini göster
-          echo "📂 Makefile hedefleri:"
-          make -qp 2>/dev/null | grep -E '^[a-zA-Z0-9_-]+:' | cut -d: -f1 | head -20 || echo "Makefile okunamadı!"
-          
-          # Dene: zImage veya Image
-          echo "📂 Derleme deneniyor..."
-          make -j$(nproc) zImage dtbs 2>/dev/null || \
-          make -j$(nproc) Image dtbs 2>/dev/null || \
-          make -j$(nproc) zImage 2>/dev/null || \
-          make -j$(nproc) Image 2>/dev/null || \
-          make -j$(nproc) 2>/dev/null
+        # DOĞRUDAN MAKE (HATA YAKALA)
+        echo "📂 Derleme başlıyor (make)..."
+        make -j$(nproc) 2>&1 | tee build.log
+        
+        # Hata varsa göster
+        if [ $? -ne 0 ]; then
+          echo "❌ Derleme başarısız! Hata mesajları:"
+          grep -i "error" build.log | head -20
+          grep -i "missing" build.log | head -10
+          exit 1
         fi
+
+    # ============================================
+    # 5. KERNEL GÖRÜNTÜSÜNÜ BUL
+    # ============================================
+    - name: 📦 Find Kernel Image
+      run: |
+        cd kernel-source
         
-        # 4. Derleme sonucunu kontrol et
-        echo "📂 Derleme sonucu kontrol ediliyor..."
+        echo "🔍 Kernel görüntüsü aranıyor..."
         
-        # Image.gz ara
+        # Tüm olası isimleri ara
         if [ -f "arch/arm64/boot/Image.gz" ]; then
-          echo "✅ Image.gz bulundu!"
-          ls -lh arch/arm64/boot/Image.gz
           KERNEL_IMG="arch/arm64/boot/Image.gz"
-          
-        # Image ara
         elif [ -f "arch/arm64/boot/Image" ]; then
-          echo "✅ Image bulundu! Sıkıştırılıyor..."
+          KERNEL_IMG="arch/arm64/boot/Image"
           gzip -9 arch/arm64/boot/Image
           KERNEL_IMG="arch/arm64/boot/Image.gz"
-          
-        # zImage ara
         elif [ -f "arch/arm64/boot/zImage" ]; then
-          echo "✅ zImage bulundu! Sıkıştırılıyor..."
+          KERNEL_IMG="arch/arm64/boot/zImage"
           gzip -9 arch/arm64/boot/zImage
           mv arch/arm64/boot/zImage.gz arch/arm64/boot/Image.gz
           KERNEL_IMG="arch/arm64/boot/Image.gz"
-          
-        # Diğer olası isimler
+        elif [ -f "arch/arm64/boot/Image-dtb" ]; then
+          KERNEL_IMG="arch/arm64/boot/Image-dtb"
+          gzip -9 arch/arm64/boot/Image-dtb
+          mv arch/arm64/boot/Image-dtb.gz arch/arm64/boot/Image.gz
+          KERNEL_IMG="arch/arm64/boot/Image.gz"
         else
           echo "❌ Bilinen bir kernel görüntüsü bulunamadı!"
           echo "📂 Mevcut dosyalar:"
-          find . -name "*Image*" -o -name "*zImage*" | head -20
+          find . -name "*Image*" -o -name "*zImage*" -o -name "*vmlinux*" | head -20
           exit 1
         fi
         
-        echo "✅ KERNEL_IMG=$KERNEL_IMG"
+        echo "✅ Kernel: $KERNEL_IMG"
+        ls -lh $KERNEL_IMG
 
     # ============================================
-    # 5. BOOT.IMG OLUŞTUR
+    # 6. BOOT.IMG OLUŞTUR
     # ============================================
     - name: 📦 Create Boot.img
       run: |
@@ -172,8 +159,6 @@ jobs:
           echo "❌ Kernel görüntüsü yok!"
           exit 1
         fi
-        
-        echo "✅ Kernel: $KERNEL_IMG"
         
         dd if=/dev/zero of=boot-package/boot.img bs=1M count=32
         dd if=$KERNEL_IMG of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
@@ -188,7 +173,7 @@ jobs:
         ls -lh boot-package/boot.img
 
     # ============================================
-    # 6. ORANGEFOX PAKETİ
+    # 7. ORANGEFOX PAKETİ
     # ============================================
     - name: 🦊 Create OrangeFox Package
       run: |
@@ -198,7 +183,7 @@ jobs:
         cat > ofox-package/META-INF/com/google/android/updater-script <<'EOF'
         ui_print(" ");
         ui_print("🦊 OrangeFox Recovery");
-        ui_print("📱 SM-G611F Universal Kernel");
+        ui_print("📱 SM-G611F Kernel");
         ui_print("=======================================");
         ui_print(" ");
         ui_print("🔹 Tüm PixelOS GSI'lar ile uyumlu");
@@ -219,13 +204,9 @@ jobs:
         
         ui_print " ";
         ui_print "✅ Kernel flashed!";
-        ui_print "📌 Şimdi PixelOS GSI'yı flashla:";
-        ui_print "   Install → Install Image → system.img";
-        ui_print "   Partition: System Image";
-        ui_print "   Sonra Format Data → Reboot";
         ui_print(" ");
         ui_print("🔄 Rebooting...");
-        sleep 5
+        sleep 3
         reboot
         EOF
         
@@ -238,21 +219,21 @@ jobs:
         ro.arch=arm64
         ro.treble.enabled=true
         ro.vndk.version=34
-        ro.product.cpu.abi=arm64-v8a
         EOF
         
         cd ofox-package
-        zip -r9 ../SM-G611F_Universal_Kernel_$(date +%Y%m%d_%H%M).zip *
+        zip -r9 ../SM-G611F_Kernel_$(date +%Y%m%d_%H%M).zip *
         cd ..
 
     # ============================================
-    # 7. SONUÇLARI YAYINLA
+    # 8. SONUÇLARI YAYINLA
     # ============================================
     - name: 📤 Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: SM-G611F-Universal-Kernel
+        name: SM-G611F-Kernel
         path: |
-          SM-G611F_Universal_Kernel_*.zip
+          SM-G611F_Kernel_*.zip
           boot-package/boot.img
+          kernel-source/build.log
         retention-days: 7
