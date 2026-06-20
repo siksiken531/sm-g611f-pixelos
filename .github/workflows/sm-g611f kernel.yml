@@ -19,7 +19,7 @@ jobs:
           libelf-dev libssl-dev dwarves
 
     # ============================================
-    # 2. KERNEL KAYNAĞI
+    # 2. KERNEL KAYNAĞI (SAMSUNG ÖZEL)
     # ============================================
     - name: 📥 Download Samsung Kernel
       run: |
@@ -43,14 +43,13 @@ jobs:
           tar -xzf Platform.tar.gz
         fi
         
-        # Klasör yapısını düzelt
+        # Klasör düzelt
         if [ -d "kernel" ]; then
           mv kernel/* .
           rmdir kernel
         fi
         
         echo "✅ Kaynaklar hazır!"
-        ls -la arch/arm64/configs/ | head -20
 
     # ============================================
     # 3. ARM64 TOOLCHAIN
@@ -65,7 +64,7 @@ jobs:
         echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (DOĞRU YOL İLE)
+    # 4. KERNEL DERLE (SAMSUNG ÖZEL YÖNTEM)
     # ============================================
     - name: 🏗️ Build Universal Kernel
       run: |
@@ -73,51 +72,37 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # Config dosyasını doğrudan kullan
-        echo "📂 Kullanılan config: arch/arm64/configs/on7xref1te_01_defconfig"
+        # 1. MEVCUT config'i DOĞRUDAN KULLAN
+        echo "📂 Config: arch/arm64/configs/on7xref1te_01_defconfig"
+        cp arch/arm64/configs/on7xref1te_01_defconfig .config
         
-        # Önce varsayılan config'i oluştur
-        make defconfig
-        
-        # Sonra on7xref1te_01_defconfig'teki ayarları ekle
-        cat arch/arm64/configs/on7xref1te_01_defconfig >> .config
-        
-        # SM-G611F ve Treble için özel ayarlar
+        # 2. SM-G611F ve Treble ayarlarını EKLE
         cat >> .config <<'EOF'
-        # Cihaz adını değiştir
         CONFIG_MACH_EXYNOS7870=y
         CONFIG_MACH_G611F=y
-        
-        # Treble zorunlu
         CONFIG_ANDROID_BINDER_IPC=y
         CONFIG_ANDROID_BINDERFS=y
         CONFIG_ANDROID_VENDOR=y
         CONFIG_ANDROID_TREBLE=y
-        
-        # ARM64
         CONFIG_ARM64_4K_PAGES=y
         CONFIG_ARM64_16K_PAGES=n
-        
-        # GSI için gerekli
         CONFIG_ION=y
         CONFIG_SYNC_FILE=y
         CONFIG_DM_ANDROID=y
         CONFIG_OVERLAY_FS=y
-        
-        # PixelOS performans
         CONFIG_HZ_300=y
         CONFIG_PREEMPT=y
         CONFIG_ENERGY_AWARE_SCHEDULING=y
         CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
-        # Eski config'leri temizle ve yeniden oluştur
-        make olddefconfig
+        # 3. Config'i düzenle (eski ayarları temizle)
+        make oldconfig
         
-        # Derle
+        # 4. Derle (Image.gz ve dtbs)
         make -j$(nproc) Image.gz dtbs
         
-        # Kontrol
+        # 5. Kontrol
         if [ ! -f "arch/arm64/boot/Image.gz" ]; then
           echo "❌ Derleme başarısız!"
           exit 1
@@ -135,12 +120,10 @@ jobs:
         dd if=kernel-source/arch/arm64/boot/Image.gz of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
         
         if [ -d "kernel-source/arch/arm64/boot/dts" ]; then
-          for dtb in kernel-source/arch/arm64/boot/dts/exynos/*.dtb 2>/dev/null; do
+          for dtb in kernel-source/arch/arm64/boot/dts/*/*.dtb 2>/dev/null; do
             [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096 conv=notrunc
           done
         fi
-        
-        echo "✅ boot.img oluşturuldu!"
 
     # ============================================
     # 6. ORANGEFOX PAKETİ
