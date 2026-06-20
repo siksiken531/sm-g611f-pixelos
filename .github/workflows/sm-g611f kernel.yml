@@ -1,170 +1,176 @@
-name: 🔥 Auto ARM64 Treble ROM Builder
+name: 🔥 SM-G611F Universal PixelOS Kernel
 
 on:
-  workflow_dispatch:  # Manuel tetikle
+  workflow_dispatch:
 
 jobs:
-  ultimate-build:
+  build:
     runs-on: ubuntu-22.04
     steps:
     # ============================================
-    # 1. ORTAM HAZIRLIĞI (Her şey otomatik)
+    # 1. ORTAM HAZIRLIĞI
     # ============================================
-    - name: ⚡ Dev Environment Setup
+    - name: ⚡ Setup Environment
       run: |
         sudo apt update
-        sudo apt install -y git gnupg flex bison gperf build-essential \
-          zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
-          lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev \
-          libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig \
-          python3 python3-pip bc cpio rsync ccache liblz4-tool \
-          libssl-dev dwarves device-tree-compiler lzop
+        sudo apt install -y git build-essential flex bison bc \
+          zip curl python3-pip libssl-dev device-tree-compiler \
+          gcc-aarch64-linux-gnu
 
     # ============================================
-    # 2. KERNEL KAYNAKLARI (Samsung'dan çek)
+    # 2. KERNEL KAYNAĞI
     # ============================================
-    - name: 📥 Download Samsung Kernel Source
+    - name: 📥 Download Samsung Kernel
       run: |
-        # Senin verdiğin linkten indir (Google Drive'dan wget ile)
-        # NOT: Google Drive'dan wget zor, alternatives:
-        # Alternatif 1: GitHub'a önceden koy (tavsiye)
-        # Alternatif 2: gdown aracı
-        pip3 install gdown
-        gdown "https://drive.google.com/uc?id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -O source.zip
-        unzip source.zip -d kernel-source
-        ls -la kernel-source/
+        mkdir -p kernel-source
+        if [ -f "Kernel.tar.gz" ]; then
+          tar -xzf Kernel.tar.gz -C kernel-source/
+        else
+          pip3 install gdown
+          gdown "https://drive.google.com/uc?id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -O source.zip
+          unzip source.zip -d kernel-source/
+        fi
+        
+        cd kernel-source
+        [ -d "kernel" ] && mv kernel/* . && rmdir kernel
 
     # ============================================
-    # 3. AOSP KAYNAKLARI (ROM için)
+    # 3. ARM64 TOOLCHAIN
     # ============================================
-    - name: 📥 Download AOSP Source (Treble manifest)
-      run: |
-        mkdir -p rom-source
-        cd rom-source
-        # Treble uyumlu AOSP (Android 13/14)
-        repo init -u https://android.googlesource.com/platform/manifest -b android-14.0.0_r1 --depth=1
-        repo sync -c -j$(nproc) --force-sync --no-clone-bundle --no-tags
-
-    # ============================================
-    # 4. KERNEL DERLE (ARM64 + Treble)
-    # ============================================
-    - name: 🔧 Build Kernel with Treble Flags
+    - name: 🔧 Setup Toolchain
       run: |
         cd kernel-source
-        # Toolchain'leri al
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
-        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang
+        echo "PATH=$(pwd)/toolchain/bin:$PATH" >> $GITHUB_ENV
+
+    # ============================================
+    # 4. KERNEL DERLE (TÜM PIXELOS GSI'LAR İÇİN)
+    # ============================================
+    - name: 🏗️ Build Universal Kernel
+      run: |
+        cd kernel-source
+        export ARCH=arm64
+        export CROSS_COMPILE=aarch64-linux-android-
         
-        # Treble config oluştur
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- \
-          CLANG_TRIPLE=aarch64-linux-gnu- CC=clang \
-          O=out vendor/g611f_defconfig
+        # Config
+        if [ -f "arch/arm64/configs/exynos7870_g611f_defconfig" ]; then
+          make exynos7870_g611f_defconfig
+        elif [ -f "arch/arm64/configs/exynos7870_defconfig" ]; then
+          make exynos7870_defconfig
+        else
+          make defconfig
+        fi
         
-        # ZORUNLU Treble bayrakları
-        echo "CONFIG_ANDROID_BINDER_IPC=y" >> out/.config
-        echo "CONFIG_ANDROID_BINDERFS=y" >> out/.config
-        echo "CONFIG_ANDROID_VENDOR=y" >> out/.config
-        echo "CONFIG_ARM64_4K_PAGES=y" >> out/.config
-        echo "CONFIG_ARM64_16K_PAGES=n" >> out/.config
+        # PixelOS GSI uyumluluk bayrakları
+        cat >> .config <<'EOF'
+        # Treble zorunlu (GSI için olmazsa olmaz)
+        CONFIG_ANDROID_BINDER_IPC=y
+        CONFIG_ANDROID_BINDERFS=y
+        CONFIG_ANDROID_VENDOR=y
+        CONFIG_ANDROID_TREBLE=y
+        CONFIG_ARM64_4K_PAGES=y
+        CONFIG_ARM64_16K_PAGES=n
+        
+        # PixelOS GSI için gerekli
+        CONFIG_ION=y
+        CONFIG_SYNC_FILE=y
+        CONFIG_DM_ANDROID=y
+        CONFIG_OVERLAY_FS=y
+        CONFIG_HZ_300=y
+        CONFIG_PREEMPT=y
+        
+        # Performans
+        CONFIG_ENERGY_AWARE_SCHEDULING=y
+        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+        EOF
         
         # Derle
-        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- \
-          CLANG_TRIPLE=aarch64-linux-gnu- CC=clang \
-          O=out -j$(nproc)
+        make -j$(nproc) Image.gz dtbs
         
-        # Kernel image ve DTBları al
-        mkdir -p ../rom-source/device/samsung/g611f-kernel
-        cp out/arch/arm64/boot/Image.gz ../rom-source/device/samsung/g611f-kernel/
-        cp out/arch/arm64/boot/dts/exynos/*.dtb ../rom-source/device/samsung/g611f-kernel/
+        [ -f "arch/arm64/boot/Image.gz" ] || exit 1
 
     # ============================================
-    # 5. ROM DERLE (Treble + ARM64)
+    # 5. BOOT.IMG OLUŞTUR
     # ============================================
-    - name: 🏗️ Build Treble ARM64 ROM
+    - name: 📦 Create Boot.img
       run: |
-        cd rom-source
-        # Cihaz tree'sini oluştur (vendor)
-        mkdir -p device/samsung/g611f
-        cat > device/samsung/g611f/device.mk <<EOF
-        \$(call inherit-product, \$(SRC_TARGET_DIR)/product/aosp_base_telephony.mk)
-        \$(call inherit-product, \$(SRC_TARGET_DIR)/product/treble_common.mk)
+        mkdir -p boot-package
         
-        PRODUCT_NAME := g611f
-        PRODUCT_DEVICE := g611f
-        PRODUCT_BRAND := samsung
-        PRODUCT_MANUFACTURER := samsung
-        PRODUCT_MODEL := SM-G611F
+        # Basit boot.img oluştur
+        dd if=/dev/zero of=boot-package/boot.img bs=1M count=32
+        dd if=kernel-source/arch/arm64/boot/Image.gz of=boot-package/boot.img bs=4096 seek=2048
         
-        # Treble zorunlu
-        PRODUCT_FULL_TREBLE_OVERRIDE := true
-        PRODUCT_USE_VNDK_OVERRIDE := true
-        TARGET_COPY_OUT_VENDOR := vendor
-        EOF
-        
-        # Treble için gerekli BoardConfig
-        cat > device/samsung/g611f/BoardConfig.mk <<EOF
-        TARGET_ARCH := arm64
-        TARGET_ARCH_VARIANT := armv8-a
-        TARGET_CPU_VARIANT := generic
-        TARGET_2ND_ARCH := arm
-        TARGET_2ND_ARCH_VARIANT := armv7-a-neon
-        TARGET_2ND_CPU_VARIANT := cortex-a53
-        TARGET_USES_64_BIT_BINDER := true
-        BOARD_USES_VENDORIMAGE := true
-        BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE := ext4
-        BOARD_VNDK_VERSION := current
-        EOF
-        
-        # Ortam değişkenleri
-        source build/envsetup.sh
-        lunch aosp_g611f-userdebug
-        
-        # ROM'u derle (Treble)
-        make -j$(nproc) systemimage vendorimage
-        
-        # Sparse'ten raw'a çevir
-        mkdir -p ../final-rom
-        simg2img out/target/product/g611f/system.img ../final-rom/system.img
-        simg2img out/target/product/g611f/vendor.img ../final-rom/vendor.img
+        # DTB ekle
+        for dtb in kernel-source/arch/arm64/boot/dts/*.dtb; do
+          [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096
+        done
 
     # ============================================
-    # 6. FLASHABLE ZIP PAKETLE
+    # 6. ORANGEFOX PAKETİ
     # ============================================
-    - name: 📦 Create Flashable ROM ZIP
+    - name: 🦊 Create OrangeFox Package
       run: |
-        mkdir -p rom-package/META-INF/com/google/android
-        mkdir -p rom-package/treble/arm64
+        mkdir -p ofox-package/META-INF/com/google/android
+        mkdir -p ofox-package/devices/g611f
         
-        # updater-script oluştur
-        cat > rom-package/META-INF/com/google/android/updater-script <<'EOF'
-        ui_print("🚀 Installing ARM64 Treble ROM for SM-G611F");
-        ui_print("Formatting system...");
-        format("ext4", "EMMC", "/dev/block/by-name/system", "0", "/system");
-        ui_print("Formatting vendor...");
-        format("ext4", "EMMC", "/dev/block/by-name/vendor", "0", "/vendor");
+        cat > ofox-package/META-INF/com/google/android/updater-script <<'EOF'
+        ui_print(" ");
+        ui_print("🦊 OrangeFox Recovery");
+        ui_print("📱 SM-G611F Universal Kernel");
+        ui_print("=======================================");
+        ui_print(" ");
+        ui_print("🔹 Tüm PixelOS GSI'lar ile uyumlu");
+        ui_print("🔹 Treble + ARM64");
+        ui_print("🔹 Android 14/15 Compatible");
+        ui_print(" ");
         
-        ui_print("Extracting system...");
-        package_extract_dir("treble/arm64/system", "/system");
-        ui_print("Extracting vendor...");
-        package_extract_dir("treble/arm64/vendor", "/vendor");
+        if [ -e "/dev/block/by-name/boot" ]; then
+          BOOT_PART="/dev/block/by-name/boot"
+        else
+          ui_print "❌ Boot partition not found!"
+          exit 1
+        fi
         
-        ui_print("✅ Installation complete!");
-        ui_print("Rebooting...");
+        ui_print "📌 Flashing kernel...";
+        dd if=/dev/zero of=$BOOT_PART bs=4096 count=8192
+        package_extract_file("boot.img", $BOOT_PART);
+        
+        ui_print " ";
+        ui_print "✅ Kernel flashed!";
+        ui_print "📌 Şimdi PixelOS GSI'yı flashla:";
+        ui_print "   Install → Install Image → system.img";
+        ui_print "   Partition: System Image";
+        ui_print "   Sonra Format Data → Reboot";
+        ui_print(" ");
+        ui_print("🔄 Rebooting...");
+        sleep 5
+        reboot
         EOF
         
-        # Dosyaları kopyala
-        cp final-rom/system.img rom-package/treble/arm64/
-        cp final-rom/vendor.img rom-package/treble/arm64/
+        cp boot-package/boot.img ofox-package/
         
-        # ZIP'le
-        cd rom-package
-        zip -r9 ../SM-G611F_Treble_ARM64_$(date +%Y%m%d).zip *
+        cat > ofox-package/devices/g611f/device.prop <<EOF
+        ro.product.model=SM-G611F
+        ro.product.brand=samsung
+        ro.product.device=g611f
+        ro.arch=arm64
+        ro.treble.enabled=true
+        ro.vndk.version=34
+        ro.product.cpu.abi=arm64-v8a
+        EOF
+        
+        cd ofox-package
+        zip -r9 ../SM-G611F_Universal_Kernel_$(date +%Y%m%d_%H%M).zip *
+        cd ..
 
     # ============================================
-    # 7. SONUCU YAYINLA
+    # 7. SONUÇLARI YAYINLA
     # ============================================
-    - name: 📤 Upload Final ROM
+    - name: 📤 Upload Artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: SM-G611F-Treble-ARM64-ROM
-        path: SM-G611F_Treble_ARM64_*.zip
+        name: SM-G611F-Universal-Kernel
+        path: |
+          SM-G611F_Universal_Kernel_*.zip
+          boot-package/boot.img
+        retention-days: 7
