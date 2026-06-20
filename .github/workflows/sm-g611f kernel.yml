@@ -1,4 +1,4 @@
-name: 🔥 SM-G611F Kernel (Samsung Out)
+name: 🔥 SM-G611F Kernel (Direct Make)
 
 on:
   workflow_dispatch:
@@ -67,17 +67,13 @@ jobs:
         
         echo "✅ Config: $CONFIG_FILE"
         
-        # 1. OUT klasörünü oluştur
-        echo "📂 OUT klasörü oluşturuluyor..."
-        mkdir -p out
-        
-        # 2. Config'i doğrudan out/.config'e kopyala
+        # 1. Config'i doğrudan .config'e kopyala
         echo "📂 Config kopyalanıyor..."
-        cp "$CONFIG_FILE" out/.config
+        cp "$CONFIG_FILE" .config
         
-        # 3. Treble ayarlarını ekle
+        # 2. Treble ayarlarını ekle
         echo "📂 Treble ayarları ekleniyor..."
-        cat >> out/.config <<'EOF'
+        cat >> .config <<'EOF'
         CONFIG_ANDROID_BINDER_IPC=y
         CONFIG_ANDROID_BINDERFS=y
         CONFIG_ANDROID_VENDOR=y
@@ -94,31 +90,56 @@ jobs:
         CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
-        # 4. Config'i düzenle
-        echo "📂 Config düzenleniyor..."
-        make O=out oldconfig
-        
-        # 5. Derle
+        # 3. DOĞRUDAN DERLE (HEDEF YOK!)
         echo "📂 Derleme başlıyor..."
-        make O=out -j$(nproc) Image.gz dtbs
+        make -j$(nproc)
         
-        # 6. Kontrol
-        if [ -f "out/arch/arm64/boot/Image.gz" ]; then
-          echo "✅ Derleme başarılı!"
-          ls -lh out/arch/arm64/boot/Image.gz
+        # 4. Kernel görüntüsünü bul
+        echo "🔍 Kernel görüntüsü aranıyor..."
+        if [ -f "arch/arm64/boot/Image.gz" ]; then
+          echo "✅ Image.gz bulundu!"
+          ls -lh arch/arm64/boot/Image.gz
+        elif [ -f "arch/arm64/boot/Image" ]; then
+          echo "✅ Image bulundu! Sıkıştırılıyor..."
+          gzip -9 arch/arm64/boot/Image
+          ls -lh arch/arm64/boot/Image.gz
+        elif [ -f "arch/arm64/boot/zImage" ]; then
+          echo "✅ zImage bulundu! Sıkıştırılıyor..."
+          gzip -9 arch/arm64/boot/zImage
+          mv arch/arm64/boot/zImage.gz arch/arm64/boot/Image.gz
+          ls -lh arch/arm64/boot/Image.gz
         else
-          echo "❌ Derleme başarısız!"
+          echo "❌ Kernel görüntüsü bulunamadı!"
+          find . -name "*Image*" -o -name "*zImage*" | head -20
           exit 1
         fi
 
     - name: 📦 Create Boot.img
       run: |
         mkdir -p boot-package
-        dd if=/dev/zero of=boot-package/boot.img bs=1M count=32
-        dd if=kernel-source/out/arch/arm64/boot/Image.gz of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
         
-        if [ -d "kernel-source/out/arch/arm64/boot/dts" ]; then
-          for dtb in kernel-source/out/arch/arm64/boot/dts/*/*.dtb 2>/dev/null; do
+        # Kernel'i bul
+        if [ -f "kernel-source/arch/arm64/boot/Image.gz" ]; then
+          KERNEL_IMG="kernel-source/arch/arm64/boot/Image.gz"
+        elif [ -f "kernel-source/arch/arm64/boot/Image" ]; then
+          gzip -9 kernel-source/arch/arm64/boot/Image
+          KERNEL_IMG="kernel-source/arch/arm64/boot/Image.gz"
+        elif [ -f "kernel-source/arch/arm64/boot/zImage" ]; then
+          gzip -9 kernel-source/arch/arm64/boot/zImage
+          mv kernel-source/arch/arm64/boot/zImage.gz kernel-source/arch/arm64/boot/Image.gz
+          KERNEL_IMG="kernel-source/arch/arm64/boot/Image.gz"
+        else
+          echo "❌ Kernel görüntüsü yok!"
+          exit 1
+        fi
+        
+        echo "✅ Kernel: $KERNEL_IMG"
+        
+        dd if=/dev/zero of=boot-package/boot.img bs=1M count=32
+        dd if=$KERNEL_IMG of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
+        
+        if [ -d "kernel-source/arch/arm64/boot/dts" ]; then
+          for dtb in kernel-source/arch/arm64/boot/dts/*/*.dtb 2>/dev/null; do
             [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096 conv=notrunc
           done
         fi
