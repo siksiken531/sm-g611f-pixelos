@@ -1,4 +1,4 @@
-name: 🔥 SM-G611F Universal Kernel (Samsung Özel)
+name: 🔥 SM-G611F Kernel Builder (Auto)
 
 on:
   workflow_dispatch:
@@ -48,6 +48,8 @@ jobs:
         fi
         
         echo "✅ Kaynaklar hazır!"
+        echo "📂 Klasör yapısı:"
+        ls -la | head -20
 
     # ============================================
     # 3. TOOLCHAIN
@@ -62,7 +64,7 @@ jobs:
         echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (SAMSUNG ÖZEL)
+    # 4. KERNEL DERLE (build.sh VAR MI?)
     # ============================================
     - name: 🏗️ Build Kernel
       run: |
@@ -70,19 +72,23 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # Config dosyasını bul
+        # 1. Config dosyasını bul
+        echo "🔍 Config dosyası aranıyor..."
         CONFIG_FILE=$(find . -name "on7xreflte_01_defconfig" | head -1)
         if [ -z "$CONFIG_FILE" ]; then
-          echo "❌ Config bulunamadı!"
+          CONFIG_FILE=$(find . -name "*defconfig" | head -1)
+        fi
+        
+        if [ -z "$CONFIG_FILE" ] || [ ! -f "$CONFIG_FILE" ]; then
+          echo "❌ Hiçbir config dosyası bulunamadı!"
           exit 1
         fi
         
         echo "✅ Config: $CONFIG_FILE"
-        
-        # Config'i kopyala
         cp "$CONFIG_FILE" .config
         
-        # Treble ayarlarını ekle
+        # 2. Treble ayarlarını ekle
+        echo "📂 Treble ayarları ekleniyor..."
         cat >> .config <<'EOF'
         CONFIG_ANDROID_BINDER_IPC=y
         CONFIG_ANDROID_BINDERFS=y
@@ -100,32 +106,86 @@ jobs:
         CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
-        # SAMSUNG ÖZEL: Doğrudan derle (oldconfig yok!)
-        echo "📂 Derleme başlıyor..."
-        make -j$(nproc) Image.gz dtbs
+        # 3. build.sh VAR MI KONTROL ET
+        echo "🔍 build.sh kontrol ediliyor..."
+        if [ -f "build.sh" ]; then
+          echo "✅ build.sh bulundu! Çalıştırılıyor..."
+          chmod +x build.sh
+          ./build.sh
+        else
+          echo "⚠️ build.sh yok! Standart make ile deneniyor..."
+          
+          # Makefile hedeflerini göster
+          echo "📂 Makefile hedefleri:"
+          make -qp 2>/dev/null | grep -E '^[a-zA-Z0-9_-]+:' | cut -d: -f1 | head -20 || echo "Makefile okunamadı!"
+          
+          # Dene: zImage veya Image
+          echo "📂 Derleme deneniyor..."
+          make -j$(nproc) zImage dtbs 2>/dev/null || \
+          make -j$(nproc) Image dtbs 2>/dev/null || \
+          make -j$(nproc) zImage 2>/dev/null || \
+          make -j$(nproc) Image 2>/dev/null || \
+          make -j$(nproc) 2>/dev/null
+        fi
         
-        if [ ! -f "arch/arm64/boot/Image.gz" ]; then
-          echo "❌ Derleme başarısız!"
+        # 4. Derleme sonucunu kontrol et
+        echo "📂 Derleme sonucu kontrol ediliyor..."
+        
+        # Image.gz ara
+        if [ -f "arch/arm64/boot/Image.gz" ]; then
+          echo "✅ Image.gz bulundu!"
+          ls -lh arch/arm64/boot/Image.gz
+          KERNEL_IMG="arch/arm64/boot/Image.gz"
+          
+        # Image ara
+        elif [ -f "arch/arm64/boot/Image" ]; then
+          echo "✅ Image bulundu! Sıkıştırılıyor..."
+          gzip -9 arch/arm64/boot/Image
+          KERNEL_IMG="arch/arm64/boot/Image.gz"
+          
+        # zImage ara
+        elif [ -f "arch/arm64/boot/zImage" ]; then
+          echo "✅ zImage bulundu! Sıkıştırılıyor..."
+          gzip -9 arch/arm64/boot/zImage
+          mv arch/arm64/boot/zImage.gz arch/arm64/boot/Image.gz
+          KERNEL_IMG="arch/arm64/boot/Image.gz"
+          
+        # Diğer olası isimler
+        else
+          echo "❌ Bilinen bir kernel görüntüsü bulunamadı!"
+          echo "📂 Mevcut dosyalar:"
+          find . -name "*Image*" -o -name "*zImage*" | head -20
           exit 1
         fi
         
-        echo "✅ Derleme başarılı!"
-        ls -lh arch/arm64/boot/Image.gz
+        echo "✅ KERNEL_IMG=$KERNEL_IMG"
 
     # ============================================
-    # 5. BOOT.IMG
+    # 5. BOOT.IMG OLUŞTUR
     # ============================================
     - name: 📦 Create Boot.img
       run: |
         mkdir -p boot-package
+        
+        KERNEL_IMG="kernel-source/arch/arm64/boot/Image.gz"
+        if [ ! -f "$KERNEL_IMG" ]; then
+          echo "❌ Kernel görüntüsü yok!"
+          exit 1
+        fi
+        
+        echo "✅ Kernel: $KERNEL_IMG"
+        
         dd if=/dev/zero of=boot-package/boot.img bs=1M count=32
-        dd if=kernel-source/arch/arm64/boot/Image.gz of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
+        dd if=$KERNEL_IMG of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
         
         if [ -d "kernel-source/arch/arm64/boot/dts" ]; then
           for dtb in kernel-source/arch/arm64/boot/dts/*/*.dtb 2>/dev/null; do
             [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096 conv=notrunc
           done
         fi
+        
+        echo "✅ boot.img oluşturuldu!"
+        ls -lh boot-package/boot.img
 
     # ============================================
     # 6. ORANGEFOX PAKETİ
