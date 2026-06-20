@@ -1,4 +1,4 @@
-name: 🔥 SM-G611F Kernel (Direct Make)
+name: 🔥 SM-G611F Kernel (Nano Config)
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
         sudo apt install -y git build-essential flex bison bc \
           zip curl python3-pip libssl-dev device-tree-compiler \
           gcc-aarch64-linux-gnu make gcc libncurses5-dev \
-          libelf-dev libssl-dev dwarves
+          libelf-dev libssl-dev dwarves nano
 
     - name: 📥 Download Samsung Kernel
       run: |
@@ -52,49 +52,127 @@ jobs:
         echo "CROSS_COMPILE=aarch64-linux-android-" >> $GITHUB_ENV
         echo "ARCH=arm64" >> $GITHUB_ENV
 
+    - name: 📝 Create Config with Nano
+      run: |
+        cd kernel-source
+        
+        # Nano ile config oluştur
+        echo "📂 Nano ile .config oluşturuluyor..."
+        nano .config <<'EOF'
+        #
+        # Automatically generated config
+        #
+        CONFIG_ARM64=y
+        CONFIG_ARM64_4K_PAGES=y
+        CONFIG_ARM64_16K_PAGES=n
+        CONFIG_ARM64_64K_PAGES=n
+        
+        # Samsung Exynos
+        CONFIG_ARCH_EXYNOS=y
+        CONFIG_ARCH_EXYNOS7=y
+        CONFIG_SOC_EXYNOS7870=y
+        CONFIG_MACH_EXYNOS7870=y
+        CONFIG_MACH_G611F=y
+        CONFIG_EXYNOS_DEV_DRV=y
+        
+        # Treble zorunlu
+        CONFIG_ANDROID=y
+        CONFIG_ANDROID_BINDER_IPC=y
+        CONFIG_ANDROID_BINDERFS=y
+        CONFIG_ANDROID_VENDOR=y
+        CONFIG_ANDROID_TREBLE=y
+        
+        # GSI için gerekli
+        CONFIG_ION=y
+        CONFIG_SYNC_FILE=y
+        CONFIG_DM_ANDROID=y
+        CONFIG_OVERLAY_FS=y
+        
+        # Performans
+        CONFIG_HZ_300=y
+        CONFIG_HZ=300
+        CONFIG_PREEMPT=y
+        CONFIG_ENERGY_AWARE_SCHEDULING=y
+        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+        
+        # Dosya sistemleri
+        CONFIG_EXT4_FS=y
+        CONFIG_EXT4_FS_POSIX_ACL=y
+        CONFIG_EXT4_FS_SECURITY=y
+        CONFIG_F2FS_FS=y
+        CONFIG_F2FS_FS_SECURITY=y
+        CONFIG_NTFS_FS=y
+        
+        # Donanım desteği
+        CONFIG_MMC=y
+        CONFIG_MMC_SDHCI=y
+        CONFIG_MMC_SDHCI_S3C=y
+        CONFIG_USB=y
+        CONFIG_USB_XHCI_HCD=y
+        CONFIG_USB_EHCI_HCD=y
+        CONFIG_USB_OHCI_HCD=y
+        CONFIG_USB_STORAGE=y
+        
+        # Ağ
+        CONFIG_NET=y
+        CONFIG_INET=y
+        CONFIG_IPV6=y
+        CONFIG_WIRELESS=y
+        CONFIG_WLAN=y
+        
+        # Ses
+        CONFIG_SOUND=y
+        CONFIG_SND=y
+        CONFIG_SND_SOC=y
+        CONFIG_SND_SOC_SAMSUNG=y
+        
+        # Kamera
+        CONFIG_MEDIA_SUPPORT=y
+        CONFIG_VIDEO_DEV=y
+        CONFIG_V4L_PLATFORM_DRIVERS=y
+        
+        # Bluetooth
+        CONFIG_BT=y
+        CONFIG_BT_HCIUART=y
+        CONFIG_BT_HCIUART_H4=y
+        
+        # GPU
+        CONFIG_DRM=y
+        CONFIG_DRM_PANEL=y
+        CONFIG_DRM_EXYNOS=y
+        
+        # Güç yönetimi
+        CONFIG_PM=y
+        CONFIG_PM_DEBUG=y
+        CONFIG_PM_SLEEP=y
+        CONFIG_PM_SLEEP_DEBUG=y
+        EOF
+        
+        # Ctrl+O, Enter, Ctrl+X işlemini otomatik yap
+        # (Nano zaten dosyayı kaydedip çıkıyor)
+        
+        echo "✅ Config oluşturuldu!"
+        wc -l .config
+        
+        # Config'i kontrol et
+        echo "📂 Config içeriği (ilk 30 satır):"
+        head -30 .config
+
     - name: 🏗️ Build Kernel
       run: |
         cd kernel-source
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # Config'i bul
-        CONFIG_FILE=$(find . -name "on7xreflte_01_defconfig" | head -1)
-        if [ -z "$CONFIG_FILE" ]; then
-          echo "❌ Config bulunamadı!"
-          exit 1
-        fi
+        # Config'i düzenle
+        echo "📂 Config düzenleniyor..."
+        make oldconfig 2>/dev/null || true
         
-        echo "✅ Config: $CONFIG_FILE"
-        
-        # 1. Config'i doğrudan .config'e kopyala
-        echo "📂 Config kopyalanıyor..."
-        cp "$CONFIG_FILE" .config
-        
-        # 2. Treble ayarlarını ekle
-        echo "📂 Treble ayarları ekleniyor..."
-        cat >> .config <<'EOF'
-        CONFIG_ANDROID_BINDER_IPC=y
-        CONFIG_ANDROID_BINDERFS=y
-        CONFIG_ANDROID_VENDOR=y
-        CONFIG_ANDROID_TREBLE=y
-        CONFIG_ARM64_4K_PAGES=y
-        CONFIG_ARM64_16K_PAGES=n
-        CONFIG_ION=y
-        CONFIG_SYNC_FILE=y
-        CONFIG_DM_ANDROID=y
-        CONFIG_OVERLAY_FS=y
-        CONFIG_HZ_300=y
-        CONFIG_PREEMPT=y
-        CONFIG_ENERGY_AWARE_SCHEDULING=y
-        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
-        EOF
-        
-        # 3. DOĞRUDAN DERLE (HEDEF YOK!)
+        # Derle
         echo "📂 Derleme başlıyor..."
-        make -j$(nproc)
+        make -j$(nproc) 2>&1 | tee build.log
         
-        # 4. Kernel görüntüsünü bul
+        # Kernel görüntüsünü bul
         echo "🔍 Kernel görüntüsü aranıyor..."
         if [ -f "arch/arm64/boot/Image.gz" ]; then
           echo "✅ Image.gz bulundu!"
@@ -108,9 +186,13 @@ jobs:
           gzip -9 arch/arm64/boot/zImage
           mv arch/arm64/boot/zImage.gz arch/arm64/boot/Image.gz
           ls -lh arch/arm64/boot/Image.gz
+        elif [ -f "vmlinux" ]; then
+          echo "✅ vmlinux bulundu!"
+          ls -lh vmlinux
         else
           echo "❌ Kernel görüntüsü bulunamadı!"
-          find . -name "*Image*" -o -name "*zImage*" | head -20
+          echo "📂 Mevcut dosyalar:"
+          find . -name "*Image*" -o -name "*zImage*" -o -name "vmlinux" | head -20
           exit 1
         fi
 
