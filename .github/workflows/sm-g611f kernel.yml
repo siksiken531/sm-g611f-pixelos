@@ -8,7 +8,7 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
     # ============================================
-    # 1. ORTAM HAZIRLIĞI (EKSTRA PAKETLER EKLENDİ)
+    # 1. ORTAM HAZIRLIĞI
     # ============================================
     - name: ⚡ Setup Environment
       run: |
@@ -19,7 +19,7 @@ jobs:
           libelf-dev libssl-dev dwarves
 
     # ============================================
-    # 2. KERNEL KAYNAĞI (HATA KONTROLÜ EKLENDİ)
+    # 2. KERNEL KAYNAĞI
     # ============================================
     - name: 📥 Download Samsung Kernel
       run: |
@@ -49,13 +49,6 @@ jobs:
           rmdir kernel
         fi
         
-        # Makefile var mı kontrol et
-        if [ ! -f "Makefile" ]; then
-          echo "❌ Makefile bulunamadı! Kaynak yapısı hatalı."
-          ls -la
-          exit 1
-        fi
-        
         echo "✅ Kaynaklar hazır!"
 
     # ============================================
@@ -71,7 +64,7 @@ jobs:
         echo "ARCH=arm64" >> $GITHUB_ENV
 
     # ============================================
-    # 4. KERNEL DERLE (HATA AYIKLAMALI)
+    # 4. KERNEL DERLE (MEVCUT CONFIG İLE)
     # ============================================
     - name: 🏗️ Build Universal Kernel
       run: |
@@ -79,40 +72,45 @@ jobs:
         export ARCH=arm64
         export CROSS_COMPILE=aarch64-linux-android-
         
-        # Config dosyalarını listele
-        echo "📂 Mevcut defconfig'ler:"
-        find arch/arm64/configs -name "*defconfig" 2>/dev/null || echo "❌ Hiç config yok!"
+        # MEVCUT config'i kullan (on7xref1te_01)
+        echo "📂 Kullanılan config: on7xref1te_01_defconfig"
+        make on7xref1te_01_defconfig
         
-        # Uygun config'i bul
-        if [ -f "arch/arm64/configs/exynos7870_g611f_defconfig" ]; then
-          make exynos7870_g611f_defconfig
-        elif [ -f "arch/arm64/configs/exynos7870_defconfig" ]; then
-          make exynos7870_defconfig
-        elif [ -f "arch/arm64/configs/defconfig" ]; then
-          make defconfig
-        else
-          echo "❌ Hiçbir defconfig bulunamadı!"
-          exit 1
-        fi
-        
-        # Treble bayrakları
+        # SM-G611F ve Treble için özel ayarlar
         cat >> .config <<'EOF'
+        # Cihaz adını değiştir
+        CONFIG_MACH_EXYNOS7870=y
+        CONFIG_MACH_G611F=y
+        
+        # Treble zorunlu
         CONFIG_ANDROID_BINDER_IPC=y
         CONFIG_ANDROID_BINDERFS=y
         CONFIG_ANDROID_VENDOR=y
         CONFIG_ANDROID_TREBLE=y
+        
+        # ARM64
         CONFIG_ARM64_4K_PAGES=y
         CONFIG_ARM64_16K_PAGES=n
+        
+        # GSI için gerekli
         CONFIG_ION=y
         CONFIG_SYNC_FILE=y
+        CONFIG_DM_ANDROID=y
+        CONFIG_OVERLAY_FS=y
+        
+        # PixelOS performans
+        CONFIG_HZ_300=y
+        CONFIG_PREEMPT=y
+        CONFIG_ENERGY_AWARE_SCHEDULING=y
+        CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
         EOF
         
         # Derle
         make -j$(nproc) Image.gz dtbs
         
-        # Derleme kontrolü
+        # Kontrol
         if [ ! -f "arch/arm64/boot/Image.gz" ]; then
-          echo "❌ Derleme başarısız! Image.gz oluşmadı."
+          echo "❌ Derleme başarısız!"
           exit 1
         fi
         
@@ -124,20 +122,14 @@ jobs:
     - name: 📦 Create Boot.img
       run: |
         mkdir -p boot-package
-        
-        # Basit boot.img oluştur
         dd if=/dev/zero of=boot-package/boot.img bs=1M count=32
         dd if=kernel-source/arch/arm64/boot/Image.gz of=boot-package/boot.img bs=4096 seek=2048 conv=notrunc
         
-        # DTB'leri ekle
         if [ -d "kernel-source/arch/arm64/boot/dts" ]; then
-          for dtb in kernel-source/arch/arm64/boot/dts/*.dtb; do
+          for dtb in kernel-source/arch/arm64/boot/dts/exynos/*.dtb 2>/dev/null; do
             [ -f "$dtb" ] && dd if=$dtb of=boot-package/boot.img bs=4096 seek=4096 conv=notrunc
           done
         fi
-        
-        echo "✅ boot.img oluşturuldu:"
-        ls -lh boot-package/boot.img
 
     # ============================================
     # 6. ORANGEFOX PAKETİ
@@ -196,8 +188,6 @@ jobs:
         cd ofox-package
         zip -r9 ../SM-G611F_Universal_Kernel_$(date +%Y%m%d_%H%M).zip *
         cd ..
-        
-        echo "✅ OrangeFox ZIP oluşturuldu!"
 
     # ============================================
     # 7. SONUÇLARI YAYINLA
