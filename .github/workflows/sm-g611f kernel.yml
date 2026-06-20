@@ -1,70 +1,170 @@
-name: Build ARM64+Treble Kernel
+name: 🔥 Auto ARM64 Treble ROM Builder
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Manuel tetikle
 
 jobs:
-  build:
-    runs-on: ubuntu-20.04
-    permissions:
-      contents: write
-
+  ultimate-build:
+    runs-on: ubuntu-22.04
     steps:
-      - name: Install Dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y git build-essential flex bison bc libelf-dev libssl-dev \
-          libncurses-dev gcc-aarch64-linux-gnu unzip device-tree-compiler wget python3-pip
-          pip install gdown
+    # ============================================
+    # 1. ORTAM HAZIRLIĞI (Her şey otomatik)
+    # ============================================
+    - name: ⚡ Dev Environment Setup
+      run: |
+        sudo apt update
+        sudo apt install -y git gnupg flex bison gperf build-essential \
+          zip curl zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386 \
+          lib32ncurses5-dev x11proto-core-dev libx11-dev lib32z-dev \
+          libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig \
+          python3 python3-pip bc cpio rsync ccache liblz4-tool \
+          libssl-dev dwarves device-tree-compiler lzop
 
-      - name: Download Kernel Source
-        run: |
-          gdown "https://drive.google.com/uc?id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -O kernel.zip
-          unzip kernel.zip -d kernel_source
-          cd kernel_source
-          tar -xzf Kernel.tar.gz
-          ls -la
+    # ============================================
+    # 2. KERNEL KAYNAKLARI (Samsung'dan çek)
+    # ============================================
+    - name: 📥 Download Samsung Kernel Source
+      run: |
+        # Senin verdiğin linkten indir (Google Drive'dan wget ile)
+        # NOT: Google Drive'dan wget zor, alternatives:
+        # Alternatif 1: GitHub'a önceden koy (tavsiye)
+        # Alternatif 2: gdown aracı
+        pip3 install gdown
+        gdown "https://drive.google.com/uc?id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -O source.zip
+        unzip source.zip -d kernel-source
+        ls -la kernel-source/
 
-      - name: Find Kernel Directory
-        id: find_kernel
-        run: |
-          KERNEL_DIR=$(find kernel_source -maxdepth 2 -type d -iname "*kernel*" | head -1)
-          if [ -z "$KERNEL_DIR" ]; then
-            echo "Kernel klasörü bulunamadı!"
-            exit 1
-          fi
-          echo "KERNEL_DIR=$KERNEL_DIR" >> $GITHUB_ENV
-          echo "Bulunan klasör: $KERNEL_DIR"
+    # ============================================
+    # 3. AOSP KAYNAKLARI (ROM için)
+    # ============================================
+    - name: 📥 Download AOSP Source (Treble manifest)
+      run: |
+        mkdir -p rom-source
+        cd rom-source
+        # Treble uyumlu AOSP (Android 13/14)
+        repo init -u https://android.googlesource.com/platform/manifest -b android-14.0.0_r1 --depth=1
+        repo sync -c -j$(nproc) --force-sync --no-clone-bundle --no-tags
 
-      - name: Configure and Build Kernel
-        run: |
-          cd ${{ env.KERNEL_DIR }}
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          make on7xreflte_01_defconfig
-          scripts/config --enable CONFIG_ANDROID_BINDER_IPC
-          scripts/config --enable CONFIG_ANDROID_VENDOR_OEM_UNLOCK_SUPPORT
-          scripts/config --enable CONFIG_ANDROID_HIDL_IPC
-          scripts/config --enable CONFIG_ION
-          scripts/config --enable CONFIG_SYNC_FILE
-          scripts/config --enable CONFIG_DM_VERITY
-          scripts/config --enable CONFIG_DM_VERITY_FEC
-          make olddefconfig
-          make -j$(nproc) Image
-          make -j$(nproc) dtbs
+    # ============================================
+    # 4. KERNEL DERLE (ARM64 + Treble)
+    # ============================================
+    - name: 🔧 Build Kernel with Treble Flags
+      run: |
+        cd kernel-source
+        # Toolchain'leri al
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86 clang
+        
+        # Treble config oluştur
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- \
+          CLANG_TRIPLE=aarch64-linux-gnu- CC=clang \
+          O=out vendor/g611f_defconfig
+        
+        # ZORUNLU Treble bayrakları
+        echo "CONFIG_ANDROID_BINDER_IPC=y" >> out/.config
+        echo "CONFIG_ANDROID_BINDERFS=y" >> out/.config
+        echo "CONFIG_ANDROID_VENDOR=y" >> out/.config
+        echo "CONFIG_ARM64_4K_PAGES=y" >> out/.config
+        echo "CONFIG_ARM64_16K_PAGES=n" >> out/.config
+        
+        # Derle
+        make ARCH=arm64 CROSS_COMPILE=aarch64-linux-android- \
+          CLANG_TRIPLE=aarch64-linux-gnu- CC=clang \
+          O=out -j$(nproc)
+        
+        # Kernel image ve DTBları al
+        mkdir -p ../rom-source/device/samsung/g611f-kernel
+        cp out/arch/arm64/boot/Image.gz ../rom-source/device/samsung/g611f-kernel/
+        cp out/arch/arm64/boot/dts/exynos/*.dtb ../rom-source/device/samsung/g611f-kernel/
 
-      - name: Package Kernel
-        run: |
-          cd ${{ env.KERNEL_DIR }}
-          mkdir -p release
-          cp arch/arm64/boot/Image release/
-          cp arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || true
-          cd release
-          zip -r ../../SM-G611F_64bit_Treble_Kernel.zip *
-          cd ../..
+    # ============================================
+    # 5. ROM DERLE (Treble + ARM64)
+    # ============================================
+    - name: 🏗️ Build Treble ARM64 ROM
+      run: |
+        cd rom-source
+        # Cihaz tree'sini oluştur (vendor)
+        mkdir -p device/samsung/g611f
+        cat > device/samsung/g611f/device.mk <<EOF
+        \$(call inherit-product, \$(SRC_TARGET_DIR)/product/aosp_base_telephony.mk)
+        \$(call inherit-product, \$(SRC_TARGET_DIR)/product/treble_common.mk)
+        
+        PRODUCT_NAME := g611f
+        PRODUCT_DEVICE := g611f
+        PRODUCT_BRAND := samsung
+        PRODUCT_MANUFACTURER := samsung
+        PRODUCT_MODEL := SM-G611F
+        
+        # Treble zorunlu
+        PRODUCT_FULL_TREBLE_OVERRIDE := true
+        PRODUCT_USE_VNDK_OVERRIDE := true
+        TARGET_COPY_OUT_VENDOR := vendor
+        EOF
+        
+        # Treble için gerekli BoardConfig
+        cat > device/samsung/g611f/BoardConfig.mk <<EOF
+        TARGET_ARCH := arm64
+        TARGET_ARCH_VARIANT := armv8-a
+        TARGET_CPU_VARIANT := generic
+        TARGET_2ND_ARCH := arm
+        TARGET_2ND_ARCH_VARIANT := armv7-a-neon
+        TARGET_2ND_CPU_VARIANT := cortex-a53
+        TARGET_USES_64_BIT_BINDER := true
+        BOARD_USES_VENDORIMAGE := true
+        BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE := ext4
+        BOARD_VNDK_VERSION := current
+        EOF
+        
+        # Ortam değişkenleri
+        source build/envsetup.sh
+        lunch aosp_g611f-userdebug
+        
+        # ROM'u derle (Treble)
+        make -j$(nproc) systemimage vendorimage
+        
+        # Sparse'ten raw'a çevir
+        mkdir -p ../final-rom
+        simg2img out/target/product/g611f/system.img ../final-rom/system.img
+        simg2img out/target/product/g611f/vendor.img ../final-rom/vendor.img
 
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SM-G611F_64bit_Treble_Kernel
-          path: SM-G611F_64bit_Treble_Kernel.zip
+    # ============================================
+    # 6. FLASHABLE ZIP PAKETLE
+    # ============================================
+    - name: 📦 Create Flashable ROM ZIP
+      run: |
+        mkdir -p rom-package/META-INF/com/google/android
+        mkdir -p rom-package/treble/arm64
+        
+        # updater-script oluştur
+        cat > rom-package/META-INF/com/google/android/updater-script <<'EOF'
+        ui_print("🚀 Installing ARM64 Treble ROM for SM-G611F");
+        ui_print("Formatting system...");
+        format("ext4", "EMMC", "/dev/block/by-name/system", "0", "/system");
+        ui_print("Formatting vendor...");
+        format("ext4", "EMMC", "/dev/block/by-name/vendor", "0", "/vendor");
+        
+        ui_print("Extracting system...");
+        package_extract_dir("treble/arm64/system", "/system");
+        ui_print("Extracting vendor...");
+        package_extract_dir("treble/arm64/vendor", "/vendor");
+        
+        ui_print("✅ Installation complete!");
+        ui_print("Rebooting...");
+        EOF
+        
+        # Dosyaları kopyala
+        cp final-rom/system.img rom-package/treble/arm64/
+        cp final-rom/vendor.img rom-package/treble/arm64/
+        
+        # ZIP'le
+        cd rom-package
+        zip -r9 ../SM-G611F_Treble_ARM64_$(date +%Y%m%d).zip *
+
+    # ============================================
+    # 7. SONUCU YAYINLA
+    # ============================================
+    - name: 📤 Upload Final ROM
+      uses: actions/upload-artifact@v4
+      with:
+        name: SM-G611F-Treble-ARM64-ROM
+        path: SM-G611F_Treble_ARM64_*.zip
