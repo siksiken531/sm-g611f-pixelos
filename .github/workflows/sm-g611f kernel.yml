@@ -1,15 +1,57 @@
-     name: GSI/Treble İçin Defconfig Düzenle
+ name: Exynos 7870 Treble Kernel Builder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+    - name: Depoyu Klonla
+      uses: actions/checkout@v4
+
+    - name: Gerekli Paketleri Kur
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 file unzip curl
+
+    - name: Google Drive'dan Kernel Kaynak Kodunu İndir
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/kernel_source
+        cd $GITHUB_WORKSPACE/kernel_source
+        
+        # Google Drive virüs/büyük dosya uyarısını geçmek için çerezli indirme
+        curl -c /tmp/cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" > /tmp/confirm.html
+        CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' /tmp/confirm.html | head -n 1 | cut -d= -f2)
+        
+        if [ ! -z "$CONFIRM_CODE" ]; then
+          curl -L -b /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM_CODE}&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o kernel_source.zip
+        else
+          curl -L -b /tmp/cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o kernel_source.zip
+        fi
+        
+        echo "Arşiv dosyası çıkartılıyor..."
+        unzip kernel_source.zip || tar -xf kernel_source.zip || echo "Arşiv doğrudan açıldı veya klasör yapısında."
+        rm -f kernel_source.zip
+
+    - name: Toolchain İndir (AOSP GCC 4.9)
+      run: |
+        mkdir -p $GITHUB_WORKSPACE/toolchains
+        cd $GITHUB_WORKSPACE/toolchains
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4. vintage_arm32 || git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 arm32
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 arm64
+
+    - name: GSI/Treble İçin Defconfig Düzenle
       run: |
         cd $GITHUB_WORKSPACE/kernel_source
         
-        # Klasör yapısını görebilmek ve hata ayıklamak için mevcut dosyaları listeleyelim
         echo "=== Mevcut Klasör Yapısı ==="
         ls -R | head -n 30
         
-        # Akıllı defconfig bulucu: İçinde exynos7870 geçen herhangi bir defconfig arıyoruz
+        # İçinde exynos7870 geçen defconfig dosyasını derinlemesine arıyoruz
         DEFCONFIG_PATH=$(find . -name "*exynos7870*defconfig*" -o -name "*defconfig" | grep -i "exynos7870" | head -n 1)
         
-        # Eğer hala boşsa çaresizce ilk bulduğu defconfig'i seçsin
         if [ -z "$DEFCONFIG_PATH" ]; then
           DEFCONFIG_PATH=$(find . -name "*defconfig" | head -n 1)
         fi
@@ -17,28 +59,24 @@
         echo "Bulunan Kesin Defconfig Yolu: $DEFCONFIG_PATH"
         
         if [ -z "$DEFCONFIG_PATH" ] || [ ! -f "$DEFCONFIG_PATH" ]; then
-          echo "HATA: Klasörde hiçbir defconfig dosyası bulunamadı!"
+          echo "HATA: Defconfig dosyası bulunamadı!"
           exit 1
         fi
         
-        # 32-bit Binder'ı kapatıp 64-bit yapıyoruz (GSI için şart)
+        # GSI için kritik 64-bit Binder ve Loop ayarları yapılıyor
         sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/CONFIG_ANDROID_BINDER_IPC_32BIT=n/g' "$DEFCONFIG_PATH"
-        
-        # GSI Loop ve BinderFS ayarlarını ekliyoruz
         echo "CONFIG_ANDROID_BINDERFS=y" >> "$DEFCONFIG_PATH"
         echo "CONFIG_BLK_DEV_LOOP=y" >> "$DEFCONFIG_PATH"
         echo "CONFIG_BLK_DEV_LOOP_MIN_COUNT=16" >> "$DEFCONFIG_PATH"
         
-        # Sonraki adımda kullanmak için dosya adını kaydedelim
+        # Derleme adımında kullanılmak üzere çevre değişkenlerini kaydedelim
         echo "FINAL_DEFCONFIG_NAME=$(basename $DEFCONFIG_PATH)" >> $GITHUB_ENV
-        echo "FINAL_DEFCONFIG_DIR=$(dirname $DEFCONFIG_PATH)" >> $GITHUB_ENV
 
     - name: Kerneli Derle
       run: |
         cd $GITHUB_WORKSPACE/kernel_source
         
-        # Defconfig'in olduğu ana dizine veya kaynak kodun root dizinine geçiş kararı
-        # Genellikle arch/ klasörünün üst dizini kaynak kodun root dizinidir
+        # Kaynak kodunun ana kök dizinini buluyoruz (arch klasörünün üstü)
         ROOT_DIR=$(find . -name "arch" | head -n 1 | sed 's|/arch||')
         if [ -z "$ROOT_DIR" ]; then ROOT_DIR="."; fi
         cd "$ROOT_DIR"
