@@ -14,42 +14,37 @@ jobs:
     - name: Gerekli Paketleri Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 file unzip curl
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 file unzip python3-pip
+        pip3 install gdown
 
     - name: Google Drive'dan Kernel Kaynak Kodunu İndir
       run: |
         mkdir -p $GITHUB_WORKSPACE/kernel_source
         cd $GITHUB_WORKSPACE/kernel_source
         
-        # Google Drive virüs/büyük dosya uyarısını geçmek için çerezli indirme
-        curl -c /tmp/cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" > /tmp/confirm.html
-        CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' /tmp/confirm.html | head -n 1 | cut -d= -f2)
+        # Doğrudan gdown kullanarak kaynak kodunu çekiyoruz
+        gdown --id 1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg -O kernel_source.zip
         
-        if [ ! -z "$CONFIRM_CODE" ]; then
-          curl -L -b /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM_CODE}&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o kernel_source.zip
-        else
-          curl -L -b /tmp/cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o kernel_source.zip
-        fi
+        echo "İndirilen dosya boyutu kontrol ediliyor:"
+        ls -lh kernel_source.zip
         
         echo "Arşiv dosyası çıkartılıyor..."
-        unzip kernel_source.zip || tar -xf kernel_source.zip || echo "Arşiv doğrudan açıldı veya klasör yapısında."
+        unzip kernel_source.zip || tar -xf kernel_source.zip
         rm -f kernel_source.zip
 
     - name: Toolchain İndir (AOSP GCC 4.9)
       run: |
         mkdir -p $GITHUB_WORKSPACE/toolchains
         cd $GITHUB_WORKSPACE/toolchains
-        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4. vintage_arm32 || git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 arm32
+        # Resmi AOSP GCC 4.9 depolarını sorunsuz çekiyoruz
+        git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 arm32
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 arm64
 
     - name: GSI/Treble İçin Defconfig Düzenle
       run: |
         cd $GITHUB_WORKSPACE/kernel_source
         
-        echo "=== Mevcut Klasör Yapısı ==="
-        ls -R | head -n 30
-        
-        # İçinde exynos7870 geçen defconfig dosyasını derinlemesine arıyoruz
+        # İçinde exynos7870 geçen defconfig dosyasını arıyoruz
         DEFCONFIG_PATH=$(find . -name "*exynos7870*defconfig*" -o -name "*defconfig" | grep -i "exynos7870" | head -n 1)
         
         if [ -z "$DEFCONFIG_PATH" ]; then
@@ -63,20 +58,19 @@ jobs:
           exit 1
         fi
         
-        # GSI için kritik 64-bit Binder ve Loop ayarları yapılıyor
+        # 32-bit Binder'ı kapatıp GSI uyumlu 64-bit yapıyoruz
         sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/CONFIG_ANDROID_BINDER_IPC_32BIT=n/g' "$DEFCONFIG_PATH"
         echo "CONFIG_ANDROID_BINDERFS=y" >> "$DEFCONFIG_PATH"
         echo "CONFIG_BLK_DEV_LOOP=y" >> "$DEFCONFIG_PATH"
         echo "CONFIG_BLK_DEV_LOOP_MIN_COUNT=16" >> "$DEFCONFIG_PATH"
         
-        # Derleme adımında kullanılmak üzere çevre değişkenlerini kaydedelim
         echo "FINAL_DEFCONFIG_NAME=$(basename $DEFCONFIG_PATH)" >> $GITHUB_ENV
 
     - name: Kerneli Derle
       run: |
         cd $GITHUB_WORKSPACE/kernel_source
         
-        # Kaynak kodunun ana kök dizinini buluyoruz (arch klasörünün üstü)
+        # Kaynak kodunun ana kök dizinini buluyoruz
         ROOT_DIR=$(find . -name "arch" | head -n 1 | sed 's|/arch||')
         if [ -z "$ROOT_DIR" ]; then ROOT_DIR="."; fi
         cd "$ROOT_DIR"
