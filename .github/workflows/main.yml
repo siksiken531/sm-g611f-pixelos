@@ -1,4 +1,4 @@
-name: Canli Sunucu Baglantisi (tmate)
+name: Upterm Canli Sunucu Baglantisi
 
 on:
   workflow_dispatch:
@@ -11,14 +11,15 @@ jobs:
     - name: Depoyu Klonla
       uses: actions/checkout@v4
 
-    - name: Gerekli Tum Paketleri Kur
+    - name: Gerekli Paketleri Kur
       run: |
         sudo apt-get update
         sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 file unzip python3-pip curl wget
         pip3 install gdown
 
-    - name: Canli Terminal Baglantisini Baslat (tmate)
-      uses: mxschmitt/action-tmate@v3
+    - name: Canli Terminal Baglantisini Baslat (Upterm)
+      uses: lhotari/action-upterm@v1
       with:
-        limit-access-to-actor: false
+        ## Bağlantı koptuğunda sunucunun hemen kapanmasını engellemek için 30 dakika sınır koyuyoruz
+        wait-timeout-minutes: 30
         
