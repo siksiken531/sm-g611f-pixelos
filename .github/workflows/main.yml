@@ -1,4 +1,4 @@
-name: ngrok ile Dogrudan SSH Baglantisi
+name: En Sade Ham SSH Baglantisi
 
 on:
   workflow_dispatch:
@@ -17,22 +17,29 @@ jobs:
         sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 file unzip python3-pip curl wget
         pip3 install gdown
 
-    - name: ngrok Kur ve SSH Tüneli Başlat
+    - name: SSH Sunucusunu ve Tüneli Başlat
       run: |
-        # 1. ngrok resmi deposunu ve paketini hatasız kuruyoruz
-        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo shadowconfig on > /dev/null 2>&1 || true
-        curl -s https://ngrok-agent.s3.amazonaws.com/ngrok.asc | sudo apt-key add -
-        echo "deb https://ngrok-agent.s3.amazonaws.com buster main" | sudo tee /etc/apt/sources.list.d/ngrok.list
-        sudo apt-get update && sudo apt-get install -y ngrok
-
-        # 2. ngrok Token Tanımlama
-        ngrok config add-authtoken 3FxIXCVsZ1FFDCf68xsHVhcSMjm_82wYpz9zYcUhRfTeDumB9
-
-        # 3. GitHub kullanıcısının (runner) şifresini belirliyoruz (Bağlanırken lazım olacak)
-        echo "runner:1234" | sudo chpasswd
-
-        echo "=== SSH BAĞLANTI ADRESİNİZ HAZIRLANIYOR ==="
+        # 1. GitHub sunucusunun SSH servisini ayağa kaldırıyoruz
+        sudo apt-get install -y openssh-server
+        sudo mkdir /var/run/sshd
         
-        # 4. Doğrudan SSH (22. portu) internete açıyoruz
-        ngrok tcp 22 --log=stdout
+        # 2. Bağlanırken kullanacağın şifreyi '1234' yapıyoruz
+        echo 'runner:1234' | sudo chpasswd
+        sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+        sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/' /etc/ssh/sshd_config
+        sudo service ssh start
+
+        echo "=== BAĞLANTI LİNKİNİZ HAZIRLANIYOR (10 SANİYE BEKLEYİN) ==="
+        
+        # 3. 22. SSH portunu doğrudan localhost.run üzerinden dışarı açıyoruz
+        ssh -o StrictHostKeyChecking=no -R 80:localhost:22 nokey@localhost.run > ssh_tunnel.log 2>&1 &
+        sleep 10
+        
+        echo "--------------------------------------------------------"
+        echo "=== TERMUX'A YAPIŞTIRILACAK SSH KOMUTU AŞAĞIDADIR ==="
+        cat ssh_tunnel.log | grep -o "ssh -R .* localhost.run" | sed 's/ssh -R 80:localhost:22/ssh runner@/' || cat ssh_tunnel.log
+        echo "--------------------------------------------------------"
+        
+        # Sunucunun açık kalması için döngü
+        sleep 4h
         
