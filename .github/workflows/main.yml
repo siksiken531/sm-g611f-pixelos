@@ -1,4 +1,4 @@
-name: Upterm Canli Sunucu Baglantisi
+name: GoTTY Canli Web Terminali
 
 on:
   workflow_dispatch:
@@ -17,9 +17,24 @@ jobs:
         sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 file unzip python3-pip curl wget
         pip3 install gdown
 
-    - name: Canli Terminal Baglantisini Baslat (Upterm)
-      uses: lhotari/action-upterm@v1
-      with:
-        ## Bağlantı koptuğunda sunucunun hemen kapanmasını engellemek için 30 dakika sınır koyuyoruz
-        wait-timeout-minutes: 30
+    - name: GoTTY Kur ve Ağ Tüneli ile Canlı Başlat
+      run: |
+        # GoTTY indiriliyor ve kuruluyor
+        wget https://github.com/yudai/gotty/releases/download/v1.0.1/gotty_linux_amd64.tar.gz
+        tar -xf gotty_linux_amd64.tar.gz
+        sudo mv gotty /usr/local/bin/
+        rm -f gotty_linux_amd64.tar.gz
+
+        # Portu dış dünyaya açmak için localhost.run tüneli kullanıyoruz
+        # Arka planda tüneli başlatıp linki ekrana yazdırıyoruz
+        ssh -o StrictHostKeyChecking=no -R 80:localhost:8080 nokey@localhost.run > tunnel.log 2>&1 &
+        
+        echo "=== BAĞLANTI LİNKİNİZ HAZIRLANIYOR (10 SANİYE BEKLEYİN) ==="
+        sleep 10
+        echo "--------------------------------------------------------"
+        cat tunnel.log | grep -o "https://.*localhost.run" || cat tunnel.log
+        echo "--------------------------------------------------------"
+
+        # Web terminalini başlatıyoruz (Yazma izni açık şekilde)
+        gotty -w --port 8080 bash
         
