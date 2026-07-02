@@ -1,7 +1,7 @@
 name: Exynos 7870 Treble Kernel Builder
 
 on:
-  workflow_dispatch: # Manuel başlatmak için
+  workflow_dispatch:
 
 jobs:
   build:
@@ -14,37 +14,46 @@ jobs:
     - name: Gerekli Paketleri Kur
       run: |
         sudo apt-get update
-        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 python3-pip
-        pip3 install gdown
+        sudo apt-get install -y bc build-essential libncurses5-dev libssl-dev bison flex libelf-dev glibc-source ccache automake libgmp-dev libmpfr-dev libmpc-dev lzop lzma crossbuild-essential-armhf crossbuild-essential-arm64 file unzip
 
     - name: Google Drive'dan Kernel Kaynak Kodunu İndir
       run: |
         mkdir -p $GITHUB_WORKSPACE/kernel_source
         cd $GITHUB_WORKSPACE/kernel_source
-        # Google Drive dosya ID'si linkinden ayıklandı: 1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg
-        gdown --id 1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg -O kernel.zip
-        unzip kernel.zip
-        rm kernel.zip
+        
+        # Büyük dosya virüs tarama uyarısını geçmek için çift aşamalı curl
+        curl -c /tmp/cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" > /tmp/confirm.html
+        CONFIRM_CODE=$(grep -o 'confirm=[^&"]*' /tmp/confirm.html | head -n 1 | cut -d= -f2)
+        
+        if [ ! -z "$CONFIRM_CODE" ]; then
+          curl -L -b /tmp/cookies.txt "https://docs.google.com/uc?export=download&confirm=${CONFIRM_CODE}&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o kernel_source.zip
+        else
+          curl -L -b /tmp/cookies.txt "https://docs.google.com/uc?export=download&id=1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg" -o kernel_source.zip
+        fi
+        
+        # Arşivi çıkarıyoruz
+        echo "Arşiv açılıyor..."
+        unzip kernel_source.zip || tar -xf kernel_source.zip || echo "Arşiv açılırken hata oluştu veya zaten klasör yapısında."
+        rm -f kernel_source.zip
 
     - name: Toolchain İndir (AOSP GCC 4.9)
       run: |
         mkdir -p $GITHUB_WORKSPACE/toolchains
         cd $GITHUB_WORKSPACE/toolchains
-        # ARM32 ve ARM64 GCC Toolchain'leri indiriliyor
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9 arm32
         git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 arm64
 
     - name: GSI/Treble İçin Defconfig Düzenle
       run: |
         cd $GITHUB_WORKSPACE/kernel_source
-        # exynos7870_defconfig dosyasını bul (alt klasörlerde olabilir, o yüzden find kullanıyoruz)
-        DEFCONFIG_PATH=$(find . -name "exynos7870_defconfig" -o -name "exynos7870_exynos7870_defconfig" | head -n 1)
-        echo "Defconfig dosyası bulundu: $DEFCONFIG_PATH"
+        # Klasörün derinliklerinde defconfig dosyasını arıyoruz
+        DEFCONFIG_PATH=$(find . -name "exynos7870_defconfig" -o -name "exynos7870_exynos7870_defconfig" -o -name "*defconfig" | head -n 1)
+        echo "Kullanılan Defconfig: $DEFCONFIG_PATH"
         
-        # 64-bit Binder desteğini açıyoruz (GSI için zorunlu)
+        # 32-bit Binder'ı kapatıp 64-bit yapıyoruz (GSI için şart)
         sed -i 's/CONFIG_ANDROID_BINDER_IPC_32BIT=y/CONFIG_ANDROID_BINDER_IPC_32BIT=n/g' $DEFCONFIG_PATH
         
-        # Treble ve GSI döngü aygıtları (Loop Devices) için gerekli girdiler
+        # GSI Loop ve BinderFS ayarlarını ekliyoruz
         echo "CONFIG_ANDROID_BINDERFS=y" >> $DEFCONFIG_PATH
         echo "CONFIG_BLK_DEV_LOOP=y" >> $DEFCONFIG_PATH
         echo "CONFIG_BLK_DEV_LOOP_MIN_COUNT=16" >> $DEFCONFIG_PATH
@@ -52,15 +61,17 @@ jobs:
     - name: Kerneli Derle
       run: |
         cd $GITHUB_WORKSPACE/kernel_source
-        # Kaynak kodunun root dizinine geçiş sağlandığından emin olalım
-        if [ -d "out" ]; then rm -rf out; fi
         
         export ARCH=arm
         export CROSS_COMPILE=$GITHUB_WORKSPACE/toolchains/arm32/bin/arm-linux-androideabi-
         export CROSS_COMPILE_ARM32=$GITHUB_WORKSPACE/toolchains/arm32/bin/arm-linux-androideabi-
         
-        # Defconfig dosyasının adını tam bulup make komutuna veriyoruz
         DEFCONFIG_NAME=$(find . -name "*defconfig" | sed 's|.*/||' | grep "exynos7870" | head -n 1)
+        if [ -z "$DEFCONFIG_NAME" ]; then
+          DEFCONFIG_NAME=$(find . -name "*defconfig" | sed 's|.*/||' | head -n 1)
+        fi
+        
+        echo "Derleme başlatılıyor: $DEFCONFIG_NAME"
         make $DEFCONFIG_NAME
         make -j$(nproc)
 
