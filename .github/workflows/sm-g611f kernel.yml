@@ -1,4 +1,4 @@
-    - name: GSI/Treble İçin Defconfig Düzenle
+     name: GSI/Treble İçin Defconfig Düzenle
       run: |
         cd $GITHUB_WORKSPACE/kernel_source
         
