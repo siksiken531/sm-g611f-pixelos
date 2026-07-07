@@ -5,9 +5,15 @@ jobs:
   generate_tree:
     runs-on: ubuntu-latest
     steps:
-    - name: Depoyu Hazırla
+    - name: Depoyu Hazirla
       uses: actions/checkout@v4
 
-    - name: Canlı Terminale Baglan
-      uses: mxschmitt/action-tmate@v
-      3
+    - name: Bagimliliklari Kur ve Drive'dan Indir
+      run: |
+        sudo apt update && sudo apt install python3 python3-pip -y
+        pip3 install gdown twrpdtgen sebaubuntu_libs
+        gdown https://drive.google.com/uc?id=1qVt96SJs7zWcEgFsZ7DOabdqMMwHFQqM
+
+    - name: Canli Terminale Baglan
+      uses: mxschmitt/action-tmate@v3
+      
