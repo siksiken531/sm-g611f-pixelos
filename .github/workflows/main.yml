@@ -1,0 +1,13 @@
+name: J7 Prime 2 TWRP Tree Generator
+on: workflow_dispatch
+
+jobs:
+  generate_tree:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Depoyu Hazırla
+      uses: actions/checkout@v4
+
+    - name: Canlı Terminale Baglan
+      uses: mxschmitt/action-tmate@v
+      3
