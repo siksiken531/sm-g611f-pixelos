@@ -1,19 +1,20 @@
-name: J7 Prime 2 TWRP Tree Generator
+name: Uzak Terminal Baglantisi
 on: workflow_dispatch
 
 jobs:
-  generate_tree:
+  build:
     runs-on: ubuntu-latest
     steps:
-    - name: Depoyu Hazirla
+    - name: Depoyu Cek
       uses: actions/checkout@v4
 
-    - name: Bagimliliklari Kur ve Drive'dan Indir
+    - name: Yer Ac
       run: |
-        sudo apt update && sudo apt install python3 python3-pip -y
-        pip3 install gdown twrpdtgen sebaubuntu_libs
-        gdown https://drive.google.com/uc?id=1qVt96SJs7zWcEgFsZ7DOabdqMMwHFQqM
+        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/powershell /usr/share/swift
+        docker rmi $(docker images -q) 2>/dev/null || true
 
-    - name: Canli Terminale Baglan
+    - name: Terminali Baslat
       uses: mxschmitt/action-tmate@v3
-      
+      with:
+        limit-access-to-actor: true
+        
