@@ -1,4 +1,4 @@
- name: Root SSH Debug
+name: Root SSH Debug
 
 on:
   workflow_dispatch: # Bu satır, "Actions" sekmesinden "Run workflow" butonuna basarak manuel başlatmanı sağlar
