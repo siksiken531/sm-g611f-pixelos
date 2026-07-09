@@ -1,23 +1,21 @@
-name: Root SSH Debug
+name: Remote Build Kernel
 
 on:
-  workflow_dispatch: # Bu satır, "Actions" sekmesinden "Run workflow" butonuna basarak manuel başlatmanı sağlar
+  workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v2
 
-      - name: Setup tmate session
+      - name: Gerekli Paketleri Kur
+        run: |
+          sudo apt update
+          sudo apt install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libncurses5-dev libsdl1.2-dev libssl-dev libxml2 libxml2-utils lzop pngcrush rsync schedtool squashfs-tools xsltproc zip zlib1g-dev tmate
+
+      - name: Uzak Terminali Başlat (tmate)
         uses: mxschmitt/action-tmate@v3
         with:
-          limit-access-to-actor: true # Sadece senin GitHub hesabının bağlanmasına izin verir
-
-      - name: Keep session alive
-        run: |
-          echo "SSH bağlantısı kuruldu. İşlemlerini yapabilirsin."
-          echo "Root olmak için terminale: sudo -i yazabilirsin."
-          sleep 1800 # 30 dakika boyunca oturumu açık tutar
+          limit-access-to-actor: true
           
