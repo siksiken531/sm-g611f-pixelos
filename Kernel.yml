@@ -1,51 +1,13 @@
-name: Build Kernel from Google Drive
+name: Kernel Build
 
-on:
-  workflow_dispatch:
+on: [push, pull_request]
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
-    permissions:
-      contents: write
-
+    runs-on: ubuntu-latest
     steps:
-      - name: Install Dependencies
-        run: |
-          sudo apt update
-          sudo apt install -y git build-essential flex bison bc libelf-dev libssl-dev \
-          libncurses-dev gcc-aarch64-linux-gnu unzip python3-pip
-          pip install gdown
+      - name: Checkout source
+        uses: actions/checkout@v3
 
-      - name: Download Kernel Source from Google Drive
-        run: |
-          # Google Drive dosya ID'si
-          FILE_ID="1yqmb6s4wf4ebR-JC2DCDMhCg_3SP7VFg"
-          gdown "https://drive.google.com/uc?id=$FILE_ID" -O source.zip
-
-      - name: Extract and Build Kernel
-        run: |
-          unzip source.zip -d kernel_source
-          cd kernel_source/*/kernel/ || cd kernel_source/*/
-          export ARCH=arm64
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          make exynos7870_defconfig
-          scripts/config --enable CONFIG_ANDROID_BINDER_IPC
-          scripts/config --enable CONFIG_ANDROID_VENDOR_OEM_UNLOCK_SUPPORT
-          make -j$(nproc) Image
-          make -j$(nproc) dtbs
-
-      - name: Package Kernel
-        run: |
-          mkdir -p release
-          cp kernel_source/*/kernel/arch/arm64/boot/Image release/ 2>/dev/null || echo "Image bulunamadı"
-          cp kernel_source/*/kernel/arch/arm64/boot/dts/*.dtb release/ 2>/dev/null || echo "DTB bulunamadı"
-          cd release
-          zip -r ../SM-G611F_Treble_Kernel.zip *
-          cd ..
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SM-G611F_Treble_Kernel
-          path: SM-G611F_Treble_Kernel.zip
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
