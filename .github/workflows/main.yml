@@ -14,7 +14,7 @@ jobs:
     - name: Set up environment
       run: |
         sudo apt-get update
-        sudo apt-get install -y git curl wget unzip
+        sudo apt-get install -y git curl wget unzip build-essential openssh-client
 
     - name: Add SSH key
       run: |
@@ -26,3 +26,8 @@ jobs:
       uses: mxschmitt/action-tmate@v3
       with:
         limit-access-to-actor: false
+
+    - name: Show SSH address
+      run: |
+        echo "Use this command to connect via OpenSSH:"
+        echo "ssh $(whoami)@$(hostname)"
