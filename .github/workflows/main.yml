@@ -1,6 +1,6 @@
 name: Kernel Build
 
-on: [push, pull_request]
+on: [push]
 
 jobs:
   build:
@@ -8,6 +8,11 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v3
+
+      - name: Add SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" >> ~/.ssh/authorized_keys
 
       - name: Setup tmate session
         uses: mxschmitt/action-tmate@v3
