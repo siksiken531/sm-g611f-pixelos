@@ -1,18 +1,28 @@
-name: Kernel Build
+name: Build and Debug
 
-on: [push]
+on:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout source
-        uses: actions/checkout@v3
+    - name: Checkout repo
+      uses: actions/checkout@v4
 
-      - name: Add SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.SSH_KEY }}" >> ~/.ssh/authorized_keys
+    - name: Set up environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y git curl wget unzip
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+    - name: Add SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_KEY }}" >> ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+
+    - name: Start tmate session
+      uses: mxschmitt/action-tmate@v3
+      with:
+        limit-access-to-actor: false
