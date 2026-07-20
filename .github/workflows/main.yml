@@ -1,33 +1,16 @@
-name: Build and Debug
+name: SSH Session
 
 on:
   workflow_dispatch:
 
 jobs:
-  build:
+  ssh:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-    - name: Set up environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y git curl wget unzip build-essential openssh-client
-
-    - name: Add SSH key
-      run: |
-        mkdir -p ~/.ssh
-        echo "${{ secrets.SSH_KEY }}" >> ~/.ssh/authorized_keys
-        chmod 600 ~/.ssh/authorized_keys
-
-    - name: Start tmate session
-      uses: mxschmitt/action-tmate@v3
-      with:
-        limit-access-to-actor: false
-
-    - name: Show SSH address
-      run: |
-        echo "Use this command to connect via OpenSSH:"
-        echo "ssh $(whoami)@$(hostname)"
+      - name: Setup Tmate
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: true
+          
