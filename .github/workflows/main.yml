@@ -1,16 +1,24 @@
-name: SSH Session
+name: Build Custom ROM (Interactive SSH)
 
 on:
   workflow_dispatch:
 
 jobs:
-  ssh:
+  build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
 
-      - name: Setup Tmate
+    steps:
+      - name: Repositoriyi Kopyala
+        uses: actions/checkout@v4
+
+      - name: Disk Alanını Temizle ve Aç
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          sudo apt-get update && sudo apt-get install -y git-core gnupg flex bison build-essential zip curl zlib1g-dev libc6-dev-i386 libncurses5 x11proto-core-dev libx11-dev libgl1-mesa-dev libxml2-utils xsltproc unzip fontconfig
+
+      - name: SSH ile Bağlantı Başlat (Tmate)
         uses: mxschmitt/action-tmate@v3
         with:
-          limit-access-to-actor: true
+          limit-access-to-actor: false
+          authorized-keys: ${{ secrets.SSH_PUBLIC_KEY }}
           
