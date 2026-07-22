@@ -1,4 +1,4 @@
-name: Setup SSH Terminal Environment
+name: Setup Ubuntu XFCE with NoMachine
 
 on:
   workflow_dispatch:
@@ -7,22 +7,23 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: 1. Sistem Guncelleme
+      - name: 1. Sistem Guncelleme ve Paketler
         run: |
           sudo apt-get update
-          sudo apt-get install -y wget curl net-tools openssh-server
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies wget net-tools curl
 
-      - name: 2. SSH Servisini Yapilandir
+      - name: 2. NoMachine Indir ve Kur
         run: |
-          sudo mkdir -p /var/run/sshd
-          echo "root:password" | sudo chpasswd
-          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          sudo service ssh restart
+          curl -L "https://web9001.nomachine.com/download/9.8/Linux/nomachine_9.8.2_1_x86_64.tar.gz" -o nomachine.tar.gz
+          mkdir /tmp/nm && tar -xzf nomachine.tar.gz -C /tmp/nm
+          sudo /tmp/nm/NX/nxserver --install
+          echo "runner:password" | sudo chpasswd
 
-      - name: 3. Termux veya SSH Icin Tunel Ac
+      - name: 3. NoMachine Tuneli Baslat
         run: |
-          echo "=== SSH BAGLANTI BILGILERI ASAGIDADIR ==="
-          ssh -o StrictHostKeyChecking=no -T -R 80:localhost:22 nokey@localhost.run &
+          echo "=== NOMACHINE TUNELI ACILIYOR ==="
+          ssh -o StrictHostKeyChecking=no -T -R 80:localhost:4000 nokey@localhost.run 2>&1 &
+          sleep 8
+          echo "=== ADRESIN YUKARIDA CIKMASI GEREKIYOR ==="
           sleep 43200
           
