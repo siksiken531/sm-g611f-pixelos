@@ -1,4 +1,4 @@
-name: Setup Ubuntu XFCE with noVNC (32-bit color)
+name: Setup Ubuntu XFCE with TigerVNC (32-bit color)
 
 on:
   workflow_dispatch:
@@ -7,10 +7,10 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup Ubuntu XFCE with noVNC and 32-bit color
+      - name: Setup Ubuntu XFCE with TigerVNC and noVNC
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies tightvncserver websockify net-tools git
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies tigervnc-standalone-server websockify net-tools git curl
           
           mkdir -p ~/.vnc
           echo "password" | vncpasswd -f > ~/.vnc/passwd
@@ -26,5 +26,9 @@ jobs:
           git clone https://github.com/novnc/noVNC.git /tmp/novnc
           /tmp/novnc/utils/novnc_proxy --vnc localhost:5901 --listen 6080 &
           
-          echo "noVNC hazır!"
+          # 6080 portunu internete açmak için localhost.run tüneli kuralım
+          echo "noVNC Linki oluşturuluyor..."
+          ssh -R 80:localhost:6080 nokey@localhost.run &
+          
+          sleep 43200
           
