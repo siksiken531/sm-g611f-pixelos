@@ -10,24 +10,17 @@ jobs:
       - name: Setup NoMachine and XFCE
         run: |
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies curl wget net-tools
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies wget net-tools curl
           
-          # NoMachine (ARM/Linux DEB paketini indirip kuruyoruz - x86_64 runner için)
-          NM_URL=$(curl -s https://www.nomachine.com/download/download&id=1 | grep -oP 'https://[^\s"]+amd64\.deb' | head -n 1)
-          if [ -z "$NM_URL" ]; then
-            # Alternatif sabit indirme linki
-            wget https://download.nomachine.com/download/8.14/Linux/nomachine_8.14.22_1_amd64.deb -O nomachine.deb
-          else
-            wget "$NM_URL" -O nomachine.deb
-          fi
+          # Doğrudan senin belirttiğin link
+          curl -L "https://web9001.nomachine.com/download/9.8/Linux/nomachine_9.8.2_1_x86_64.tar.gz" -o nomachine.tar.gz
           
-          sudo apt-get install -y ./nomachine.deb
+          mkdir /tmp/nm && tar -xzf nomachine.tar.gz -C /tmp/nm
+          sudo /tmp/nm/NX/nxserver --install
           
-          # Runner kullanıcısına şifre belirleyelim (NoMachine giriş için şifre ister)
           echo "runner:password" | sudo chpasswd
           
           echo "NoMachine Tüneli oluşturuluyor..."
-          # NoMachine varsayılan portu 4000'dir
           ssh -o StrictHostKeyChecking=no -T -R 80:localhost:4000 nokey@localhost.run &
           
           sleep 43200
