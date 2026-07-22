@@ -9,19 +9,23 @@ jobs:
     steps:
       - name: Setup NoMachine and XFCE
         run: |
+          echo "=== 1. Sistem guncelleniyor ve paketler kurulusu basliyor ==="
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies wget net-tools curl
           
-          # Doğrudan senin belirttiğin link
+          echo "=== 2. NoMachine arsivi indiriliyor ==="
           curl -L "https://web9001.nomachine.com/download/9.8/Linux/nomachine_9.8.2_1_x86_64.tar.gz" -o nomachine.tar.gz
           
+          echo "=== 3. NoMachine kuruluyor ==="
           mkdir /tmp/nm && tar -xzf nomachine.tar.gz -C /tmp/nm
           sudo /tmp/nm/NX/nxserver --install
           
+          echo "=== 4. Kullanici sifresi ayarlaniyor ==="
           echo "runner:password" | sudo chpasswd
           
-          echo "NoMachine Tüneli oluşturuluyor..."
+          echo "=== 5. Tunel olusturuluyor, adres bekleniyor ==="
           ssh -o StrictHostKeyChecking=no -T -R 80:localhost:4000 nokey@localhost.run &
           
+          echo "=== KURULUM TAMAMLANDI - TUNEL AKTIF ==="
           sleep 43200
           
