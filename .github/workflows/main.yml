@@ -1,4 +1,4 @@
-name: Setup Ubuntu XFCE with NoMachine
+name: Setup SSH Terminal Environment
 
 on:
   workflow_dispatch:
@@ -7,25 +7,22 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup NoMachine and XFCE
+      - name: 1. Sistem Guncelleme
         run: |
-          echo "=== 1. Sistem guncelleniyor ve paketler kurulusu basliyor ==="
           sudo apt-get update
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies wget net-tools curl
-          
-          echo "=== 2. NoMachine arsivi indiriliyor ==="
-          curl -L "https://web9001.nomachine.com/download/9.8/Linux/nomachine_9.8.2_1_x86_64.tar.gz" -o nomachine.tar.gz
-          
-          echo "=== 3. NoMachine kuruluyor ==="
-          mkdir /tmp/nm && tar -xzf nomachine.tar.gz -C /tmp/nm
-          sudo /tmp/nm/NX/nxserver --install
-          
-          echo "=== 4. Kullanici sifresi ayarlaniyor ==="
-          echo "runner:password" | sudo chpasswd
-          
-          echo "=== 5. Tunel olusturuluyor, adres bekleniyor ==="
-          ssh -o StrictHostKeyChecking=no -T -R 80:localhost:4000 nokey@localhost.run &
-          
-          echo "=== KURULUM TAMAMLANDI - TUNEL AKTIF ==="
+          sudo apt-get install -y wget curl net-tools openssh-server
+
+      - name: 2. SSH Servisini Yapilandir
+        run: |
+          sudo mkdir -p /var/run/sshd
+          echo "root:password" | sudo chpasswd
+          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo service ssh restart
+
+      - name: 3. Termux veya SSH Icin Tunel Ac
+        run: |
+          echo "=== SSH BAGLANTI BILGILERI ASAGIDADIR ==="
+          ssh -o StrictHostKeyChecking=no -T -R 80:localhost:22 nokey@localhost.run &
           sleep 43200
           
