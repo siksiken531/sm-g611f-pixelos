@@ -1,4 +1,4 @@
-name: Sanal makineler çalıştırma
+name: Setup Ubuntu XFCE with noVNC (32-bit color)
 
 on:
   workflow_dispatch:
@@ -6,14 +6,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
-
     steps:
-      - name: SSH (Tmate) Başlat
-        uses: mxschmitt/action-tmate@v3
-        with:
-          install-dependencies: true
-
-      - name: Oturumu Açık Tut
-        run: sleep 21600
-        
+      - name: Setup Ubuntu XFCE with noVNC and 32-bit color
+        run: |
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfce4 xfce4-goodies tightvncserver websockify net-tools git
+          
+          mkdir -p ~/.vnc
+          echo "password" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+          
+          echo "#!/bin/sh" > ~/.vnc/xstartup
+          echo "xrdb $HOME/.Xresources" >> ~/.vnc/xstartup
+          echo "startxfce4 &" >> ~/.vnc/xstartup
+          chmod +x ~/.vnc/xstartup
+          
+          vncserver :1 -geometry 1280x720 -depth 32
+          
+          git clone https://github.com/novnc/noVNC.git /tmp/novnc
+          /tmp/novnc/utils/novnc_proxy --vnc localhost:5901 --listen 6080 &
+          
+          echo "noVNC hazır!"
+          
