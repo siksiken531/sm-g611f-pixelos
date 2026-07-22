@@ -1,4 +1,4 @@
-name: Setup SSH Terminal Environment
+name: NoMachine XFCE Direct SSH Tunnel
 
 on:
   workflow_dispatch:
@@ -6,23 +6,41 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
+
     steps:
-      - name: 1. Sistem Guncelleme
-        run: sudo apt-get update && sudo apt-get install -y wget curl net-tools openssh-server
+      - name: Runner Hazırlığı
+        uses: actions/checkout@v4
 
-      - name: 2. SSH Servisini Yapilandir
+      - name: Sistem Güncelleme ve XFCE Kurulumu
         run: |
-          sudo mkdir -p /var/run/sshd
-          echo "root:password" | sudo chpasswd
-          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
-          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-          sudo service ssh restart
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+            xfce4 \
+            xfce4-goodies \
+            dbus-x11 \
+            curl \
+            net-tools
 
-      - name: 3. SSH Tuneli Ac ve Adresi Bekle
+      - name: NoMachine İndir ve Kur
         run: |
-          echo "=== SSH TUNELI BASLATILIYOR ==="
-          ssh -o StrictHostKeyChecking=no -T -R 80:localhost:22 nokey@localhost.run 2>&1 | tee tunnel.log &
-          sleep 5
-          echo "--- OLUSTURULAN TUNEL ADRESI ---"
-          cat tunnel.log || true
-          sleep 43200
+          curl -fSL "https://web9001.nomachine.com/download/9.8/Linux/nomachine_9.8.2_1_x86_64.tar.gz" -o nomachine.tar.gz
+          sudo tar -zxvf nomachine.tar.gz -C /
+          sudo /etc/NX/nxserver --install
+
+      - name: Kullanıcı Şifresi Ayarla
+        run: |
+          echo "runner:sifre123" | sudo chpasswd
+          echo "Kullanıcı adı: runner"
+          echo "Şifre: sifre123"
+
+      - name: GitHub Actions SSH Servisini Aktif Et
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false
+
+      - name: Oturumu Açık Tut
+        run: |
+          echo "NoMachine 4000 portu aktif."
+          sleep 
+          infinity
