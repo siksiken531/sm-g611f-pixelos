@@ -1,13 +1,28 @@
+name: Setup SSH Terminal Environment
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 1. Sistem Guncelleme
+        run: sudo apt-get update && sudo apt-get install -y wget curl net-tools openssh-server
+
+      - name: 2. SSH Servisini Yapilandir
+        run: |
+          sudo mkdir -p /var/run/sshd
+          echo "root:password" | sudo chpasswd
+          sudo sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo service ssh restart
+
       - name: 3. SSH Tuneli Ac ve Adresi Bekle
         run: |
           echo "=== SSH TUNELI BASLATILIYOR ==="
-          # Çıktıyı hem ekrana hem dosyaya verip anlık okutuyoruz
           ssh -o StrictHostKeyChecking=no -T -R 80:localhost:22 nokey@localhost.run 2>&1 | tee tunnel.log &
-          
-          # 5 saniye tünelin oturmasını bekleyip dosyadan adresi ekrana basıyoruz
           sleep 5
           echo "--- OLUSTURULAN TUNEL ADRESI ---"
           cat tunnel.log || true
-          
           sleep 43200
-          
