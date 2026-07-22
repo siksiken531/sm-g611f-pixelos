@@ -16,7 +16,6 @@ jobs:
           echo "password" | vncpasswd -f > ~/.vnc/passwd
           chmod 600 ~/.vnc/passwd
           
-          # xstartup yapılandırmasını güvenli hale getirdik
           echo "#!/bin/sh" > ~/.vnc/xstartup
           echo "[ -r \$HOME/.Xresources ] && xrdb \$HOME/.Xresources" >> ~/.vnc/xstartup
           echo "unset SESSION_MANAGER" >> ~/.vnc/xstartup
@@ -29,8 +28,8 @@ jobs:
           git clone https://github.com/novnc/noVNC.git /tmp/novnc
           /tmp/novnc/utils/novnc_proxy --vnc localhost:5901 --listen 6080 &
           
-          echo "noVNC Linki oluşturuluyor..."
-          ssh -R 80:localhost:6080 nokey@localhost.run &
+          echo "noVNC Tüneli oluşturuluyor..."
+          ssh -o StrictHostKeyChecking=no -T -R 80:localhost:6080 nokey@localhost.run &
           
           sleep 43200
           
