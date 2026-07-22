@@ -1,18 +1,19 @@
-name: Tmate SSH Session
+name: Sanal makineler çalıştırma
 
 on:
-  workflow_dispatch: # GitHub üzerinden manuel başlatmak için
+  workflow_dispatch:
 
 jobs:
-  tmate:
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 360
 
     steps:
-      - name: Depoyu Checkout Et
-        uses: actions/checkout@v4
-
-      - name: Tmate SSH Oturumunu Başlat
+      - name: SSH (Tmate) Başlat
         uses: mxschmitt/action-tmate@v3
         with:
-          limit-access-to-actor: false # Bağlantıyı herkese/size açık tutar
-          
+          install-dependencies: true
+
+      - name: Oturumu Açık Tut
+        run: sleep 21600
+        
