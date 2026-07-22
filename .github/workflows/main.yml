@@ -20,8 +20,7 @@ jobs:
             xfce4-goodies \
             dbus-x11 \
             curl \
-            net-tools \
-            libgconf-2-4
+            net-tools
 
       - name: NoMachine İndir ve Kur
         run: |
@@ -43,5 +42,5 @@ jobs:
       - name: Oturumu Açık Tut
         run: |
           echo "NoMachine 4000 portu aktif."
-          sleep 
-          infinity
+          sleep i
+          nfinity
