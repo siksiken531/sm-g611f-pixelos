@@ -20,13 +20,14 @@ jobs:
             xfce4-goodies \
             dbus-x11 \
             curl \
-            net-tools
+            net-tools \
+            libgconf-2-4
 
       - name: NoMachine İndir ve Kur
         run: |
-          curl -fSL "https://web9001.nomachine.com/download/9.8/Linux/nomachine_9.8.2_1_x86_64.tar.gz" -o nomachine.tar.gz
-          sudo tar -zxvf nomachine.tar.gz -C /
-          sudo /etc/NX/nxserver --install
+          curl -fSL "https://web9001.nomachine.com/download/9.8/Linux/nomachine_9.8.2_1_amd64.deb" -o nomachine.deb
+          sudo dpkg -i nomachine.deb
+          sudo apt-get install -f -y
 
       - name: Kullanıcı Şifresi Ayarla
         run: |
