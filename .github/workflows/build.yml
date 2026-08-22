@@ -20,14 +20,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf libncurses5-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc zip zlib1g-dev python3 libssl-dev
 
-      - name: Clone Toolchain & Kernel Source
+      - name: Clone AOSP GCC Toolchain & Helios Kernel
         run: |
           mkdir -p toolchain
-          git clone --depth=1 https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9 toolchain/aarch64
+          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain/aarch64
           git clone --depth=1 https://github.com/ananjaser1211/Helios_7870.git kernel/samsung/exynos7870
 
       - name: Verify Setup
         run: |
-          echo "Toolchain ve Kernel klasörleri hazır:"
+          echo "Toolchain ve Kernel klasörleri kontrol ediliyor:"
           ls -la toolchain/aarch64/bin
           ls -la kernel/samsung/exynos7870
