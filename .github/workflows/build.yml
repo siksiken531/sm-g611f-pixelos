@@ -18,8 +18,13 @@ jobs:
       - name: Setup Build Environment
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf libncurses5-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc zip zlib1g-dev python3
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf libncurses5-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc zip zlib1g-dev python3 libssl-dev crossbuild-essential-arm64
 
-      - name: Sync Sources & Build
+      - name: Clone Helios Kernel Source
         run: |
-          echo "Building PixelOS Android 15 with 64-bit Kernel and Binder32 Vendor support..."
+          git clone --depth=1 https://github.com/ananjaser1211/Helios_7870.git kernel/samsung/exynos7870
+
+      - name: Verify Kernel Source
+        run: |
+          echo "Kernel kaynak kodları başarıyla indirildi:"
+          ls -la kernel/samsung/exynos7870
