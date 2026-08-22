@@ -33,7 +33,7 @@ jobs:
           mkdir -p net/wireguard
           touch net/wireguard/Kconfig net/wireguard/Makefile
 
-      - name: Build Kernel for SM-G611F (on7xreflte)
+      - name: Find Defconfigs & Build Kernel
         run: |
           TOOLCHAIN_PATH=$(pwd)/toolchain/aarch64/bin/aarch64-linux-android-
           
@@ -46,9 +46,20 @@ jobs:
           export KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
           export ANDROID_MAJOR_VERSION=o
           
-          # SM-G611F (on7xreflte) parçalarını birleştir ve .config oluştur
-          cat arch/arm64/configs/exynos7870_base_defconfig arch/arm64/configs/exynos7870-on7xreflte_defconfig > arch/arm64/configs/on7xreflte_merged_defconfig
-          make on7xreflte_merged_defconfig
+          echo "=== Repodaki Mevcut Defconfig Dosyaları ==="
+          find arch/ -name "*defconfig*"
+          
+          # on7xreflte için uygun dosya yolunu otomatik bul
+          CONF_FILE=$(find arch/ -name "*on7xreflte*" | head -n 1)
+          
+          if [ -n "$CONF_FILE" ]; then
+            CONF_NAME=$(basename $CONF_FILE)
+            echo "Bulunan konfigürasyon yükleniyor: $CONF_NAME"
+            make $CONF_NAME
+          else
+            echo "on7xreflte dosyası bulunamadı, varsayılan kütüphane deneniyor..."
+            make exynos7870_defconfig
+          fi
           
           make -j$(nproc --all) HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
 
