@@ -24,7 +24,17 @@ jobs:
         run: |
           mkdir -p toolchain
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain/aarch64
-          git clone --depth=1 https://github.com/ananjaser1211/Helios_7870.git kernel/samsung/exynos7870
+          git clone --recursive https://github.com/ananjaser1211/Helios_7870.git kernel/samsung/exynos7870
+
+      - name: Fetch WireGuard Source
+        run: |
+          cd kernel/samsung/exynos7870
+          if [ -f net/wireguard/wireguard-fetch.sh ]; then
+            bash net/wireguard/wireguard-fetch.sh || true
+          fi
+          # WireGuard Kconfig eksikse oluştur
+          mkdir -p net/wireguard
+          touch net/wireguard/Kconfig net/wireguard/Makefile
 
       - name: Build Kernel for SM-G611F (on7xreflte)
         run: |
@@ -37,8 +47,8 @@ jobs:
           export HOSTCFLAGS="-fcommon"
           export HOSTCXXFLAGS="-fcommon"
           export KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
+          export ANDROID_MAJOR_VERSION=o
           
-          # Doğrudan cihaza özel temiz defconfig yüklemesi
           make exynos7870-on7xreflte_defconfig || make exynos7870-j7y17lte_defconfig
           
           make -j$(nproc --all) HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
