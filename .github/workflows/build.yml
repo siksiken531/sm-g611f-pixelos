@@ -57,3 +57,9 @@ jobs:
         run: |
           echo "Derlenen Kernel Image kontrol ediliyor:"
           ls -la kernel/samsung/exynos7870/arch/arm64/boot/Image*
+      - name: Upload Kernel Image
+        uses: actions/upload-artifact@v4
+        with:
+          name: Helios-64bit-Image
+          path: kernel/samsung/exynos7870/arch/arm64/boot/Image
+          
