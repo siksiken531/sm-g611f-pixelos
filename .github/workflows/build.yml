@@ -28,7 +28,6 @@ jobs:
 
       - name: Build Kernel for SM-G611F (on7xreflte)
         run: |
-          # Toolchain tam yolunu alalım
           TOOLCHAIN_PATH=$(pwd)/toolchain/aarch64/bin/aarch64-linux-android-
           
           cd kernel/samsung/exynos7870
@@ -38,11 +37,14 @@ jobs:
           export HOSTCFLAGS="-fcommon"
           export HOSTCXXFLAGS="-fcommon"
           
+          # dlog_hook derleme hatasını aşmak için ek CFLAG tanımı
+          export KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
+          
           # SM-G611F (on7xreflte) konfigürasyonu
           cat arch/arm64/configs/exynos7870_base_defconfig arch/arm64/configs/exynos7870-on7xreflte_defconfig > arch/arm64/configs/tmp_on7xref_defconfig 2>/dev/null || true
           make tmp_on7xref_defconfig || make exynos7870_defconfig
 
-          make -j$(nproc --all) HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon"
+          make -j$(nproc --all) HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
 
       - name: Verify Output Image
         run: |
