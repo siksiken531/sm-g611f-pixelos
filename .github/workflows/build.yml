@@ -20,14 +20,31 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf libncurses5-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc zip zlib1g-dev python3 libssl-dev
 
-      - name: Clone AOSP GCC Toolchain & Helios Kernel
+      - name: Clone Toolchain & Helios Kernel
         run: |
           mkdir -p toolchain
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain/aarch64
           git clone --depth=1 https://github.com/ananjaser1211/Helios_7870.git kernel/samsung/exynos7870
 
-      - name: Verify Setup
+      - name: Build Kernel for SM-G611F (on7xreflte)
         run: |
-          echo "Toolchain ve Kernel klasörleri kontrol ediliyor:"
-          ls -la toolchain/aarch64/bin
-          ls -la kernel/samsung/exynos7870
+          cd kernel/samsung/exynos7870
+          export ARCH=arm64
+          export SUBARCH=arm64
+          export CROSS_COMPILE=$(pwd)/../../toolchain/aarch64/bin/aarch64-linux-android-
+          
+          # SM-G611F (on7xreflte) defconfig birleştirmesi
+          if [ -f arch/arm64/configs/exynos7870-on7xreflte_defconfig ]; then
+            make exynos7870-on7xreflte_defconfig
+          else
+            # Parçalı config birleştirme fallback
+            cat arch/arm64/configs/exynos7870_base_defconfig arch/arm64/configs/exynos7870-on7xreflte_defconfig > arch/arm64/configs/tmp_on7xref_defconfig 2>/dev/null || true
+            make tmp_on7xref_defconfig || make exynos7870_defconfig
+          fi
+
+          make -j$(nproc --all)
+
+      - name: Verify Output Image
+        run: |
+          echo "Derlenen Kernel Image kontrol ediliyor:"
+          ls -la kernel/samsung/exynos7870/arch/arm64/boot/Image*
