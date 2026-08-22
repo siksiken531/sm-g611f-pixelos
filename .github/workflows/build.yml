@@ -26,15 +26,14 @@ jobs:
           git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain/aarch64
           git clone --depth=1 https://github.com/ananjaser1211/Helios_7870.git kernel/samsung/exynos7870
 
-      - name: Hard-Fix WireGuard & Kconfig
+      - name: Remove WireGuard References
         run: |
           cd kernel/samsung/exynos7870
-          # WireGuard bağımlılığını net/Kconfig içinden tamamen kaldır
+          # WireGuard çağrılarını ve klasörlerini kökten temizle
           sed -i '/wireguard/d' net/Kconfig || true
-          mkdir -p net/wireguard
-          touch net/wireguard/Kconfig net/wireguard/Makefile
+          rm -rf net/wireguard
 
-      - name: Build Kernel for SM-G611F (on7xreflte)
+      - name: Build Kernel Image Only
         run: |
           TOOLCHAIN_PATH=$(pwd)/toolchain/aarch64/bin/aarch64-linux-android-
           
@@ -47,23 +46,12 @@ jobs:
           export KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
           export ANDROID_MAJOR_VERSION=o
           
-          # Repo içindeki derleme betiklerini kontrol et ve çalıştır
-          if [ -f cronos.sh ]; then
-            chmod +x cronos.sh
-            # cronos.sh genellikle cihaz seçimi ister, defconfig birleştirmesini yapalım
-            sed -i 's/read -p.*/CHOICE=1/' cronos.sh || true
-          fi
+          # Konfigürasyonu birleştir ve .config oluştur
+          find arch/arm64/configs/ -type f -exec cat {} + > .config
+          make olddefconfig
 
-          # Config birleştirme (Helios mimarisi)
-          if [ -f arch/arm64/configs/exynos7870-on7xreflte_defconfig ]; then
-            make exynos7870-on7xreflte_defconfig
-          else
-            # Mümkün olan tüm parçaları bularak defconfig üret
-            find arch/arm64/configs/ -type f -exec cat {} + > .config
-            make olddefconfig
-          fi
-
-          make -j$(nproc --all) HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
+          # Yalnızca ana Kernel (Image) çıktısını derle
+          make -j$(nproc --all) Image HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
 
       - name: Verify Output Image
         run: |
