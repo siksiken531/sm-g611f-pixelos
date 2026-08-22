@@ -30,11 +30,7 @@ jobs:
         run: |
           cd kernel/samsung/exynos7870
           rm -rf net/wireguard
-          git clone --depth=1 https://git.zx2c4.com/wireguard-linux-compat net/wireguard/wireguard-process 2>/dev/null || true
           mkdir -p net/wireguard
-          if [ -d net/wireguard/wireguard-process/src ]; then
-            cp -r net/wireguard/wireguard-process/src/* net/wireguard/
-          fi
           touch net/wireguard/Kconfig net/wireguard/Makefile
 
       - name: Build Kernel for SM-G611F (on7xreflte)
@@ -50,7 +46,9 @@ jobs:
           export KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
           export ANDROID_MAJOR_VERSION=o
           
-          make exynos7870-on7xreflte_defconfig || make exynos7870-j7y17lte_defconfig
+          # SM-G611F (on7xreflte) parçalarını birleştir ve .config oluştur
+          cat arch/arm64/configs/exynos7870_base_defconfig arch/arm64/configs/exynos7870-on7xreflte_defconfig > arch/arm64/configs/on7xreflte_merged_defconfig
+          make on7xreflte_merged_defconfig
           
           make -j$(nproc --all) HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
 
