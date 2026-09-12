@@ -1,4 +1,4 @@
-name: NoMachine Tailscale Windows
+name: RDP Tailscale Windows
 
 on:
   workflow_dispatch:
@@ -14,36 +14,22 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Kullanıcı Şifresini Ayarla
+      - name: Kullanıcı Şifresini Ayarla ve RDP'yi Etkinleştir
         shell: pwsh
         run: |
           Write-Host "runneradmin şifresi 'Password123!' olarak ayarlanıyor..."
           net user runneradmin Password123!
+          
+          Write-Host "Windows Uzak Masaüstü (RDP) etkinleştiriliyor..."
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-      - name: NoMachine ve Tailscale Kurulumu (Winget ile)
+      - name: Tailscale Kurulumu ve Bağlantı
         shell: pwsh
         run: |
-          Write-Host "NoMachine Winget ile kuruluyor..."
-          winget install --id NoMachine.NoMachine -e --accept-source-agreements --accept-package-agreements
-
-          Write-Host "Tailscale Winget ile kuruluyor..."
+          Write-Host "Tailscale indiriliyor ve kuruluyor..."
           winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
-
-      - name: NoMachine Lisans Kontrolünü Devre Dışı Bırakma
-        shell: pwsh
-        run: |
-          Write-Host "NoMachine sunucu ayarları güncelleniyor..."
-          $configPath = "C:\Program Files\NoMachine\etc\server.cfg"
-          if (Test-Path $configPath) {
-              # Server lisans uyarı kontrolünü kapatmak için ayar ekliyoruz veya düzenliyoruz
-              Add-Content -Path $configPath -Value "`nEnableClipboard both"
-              Restart-Service -Name "NXService" -Force -ErrorAction SilentlyContinue
-          }
-
-      - name: Tailscale Bağlantısı ve IP Alma
-        shell: pwsh
-        run: |
-          Write-Host "Tailscale servisinin başlaması bekleniyor..."
           Start-Sleep -Seconds 10
 
           Write-Host "Tailscale ağına bağlanılıyor..."
@@ -57,7 +43,7 @@ jobs:
       - name: Oturumu Açık Tutma
         shell: pwsh
         run: |
-          Write-Host "Runner aktif. NoMachine ile Tailscale IP adresine (Port: 4000) bağlanabilirsiniz."
+          Write-Host "Runner aktif. Telefonunuzdaki Microsoft Remote Desktop uygulaması ile Tailscale IP adresine bağlanabilirsiniz."
           while ($true) {
               Start-Sleep -Seconds 30
           }
