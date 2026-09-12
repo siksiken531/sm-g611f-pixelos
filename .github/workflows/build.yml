@@ -14,6 +14,12 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      - name: Kullanıcı Şifresini Ayarla
+        shell: pwsh
+        run: |
+          Write-Host "runneradmin şifresi 'Password123!' olarak ayarlanıyor..."
+          net user runneradmin Password123!
+
       - name: NoMachine ve Tailscale Kurulumu (Winget ile)
         shell: pwsh
         run: |
@@ -26,11 +32,10 @@ jobs:
       - name: Tailscale Bağlantısı ve IP Alma
         shell: pwsh
         run: |
-          Write-Host "Tailscale servsinin başlaması bekleniyor..."
+          Write-Host "Tailscale servisinin başlaması bekleniyor..."
           Start-Sleep -Seconds 10
 
           Write-Host "Tailscale ağına bağlanılıyor..."
-          # Winget ile kurulduğunda tailscale komutunun yolu:
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ github.event.inputs.tailscale_authkey }} --hostname=github-windows-runner
 
           $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
