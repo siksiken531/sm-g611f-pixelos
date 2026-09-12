@@ -1,51 +1,36 @@
-name: RDP Tailscale Windows
+name: run-windows
 
 on:
   workflow_dispatch:
-    inputs:
-      tailscale_authkey:
-        description: 'Tailscale Auth Key (tskey-auth-...)'
-        required: true
-        type: string
 
 jobs:
-  run-windows:
+  build:
     runs-on: windows-latest
-    timeout-minutes: 360
 
     steps:
-      - name: Kullanıcı Şifresini Ayarla ve RDP'yi Etkinleştir
-        shell: pwsh
+      - name: Set Password for runneradmin
+        shell: powershell
         run: |
-          Write-Host "runneradmin şifresi 'Password123!' olarak ayarlanıyor..."
-          net user runneradmin Password123!
-          
-          Write-Host "Windows Uzak Masaüstü (RDP) etkinleştiriliyor..."
+          net user runneradmin "Password123!"
+
+      - name: Enable RDP
+        shell: powershell
+        run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
       - name: Tailscale Kurulumu ve Bağlantı
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          version: latest
+
+      - name: Oturumu Açık Tutma ve Tailscale Keep-Alive
         shell: pwsh
         run: |
-          Write-Host "Tailscale indiriliyor ve kuruluyor..."
-          winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
-          Start-Sleep -Seconds 10
-
-          Write-Host "Tailscale ağına bağlanılıyor..."
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ github.event.inputs.tailscale_authkey }} --hostname=github-windows-runner
-
-          $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-          Write-Host "==================================================" -ForegroundColor Green
-          Write-Host "TAILSCALE IP ADRESİNİZ: $tsIp" -ForegroundColor Cyan
-          Write-Host "==================================================" -ForegroundColor Green
-
-            - name: Oturumu Açık Tutma ve Tailscale Keep-Alive
-        shell: pwsh
-        run: |
-          Write-Host "Runner aktif ve Tailscale tüneli canlı tutuluyor..."
+          Write-Host "Runner aktif. Telefonunuzdaki Microsoft Remote Desktop uygulaması ile Tailscale IP adresine bağlanabilirsiniz."
           while ($true) {
-              # Tailscale'in bağlantıda kalmasını tetikle
               & "C:\Program Files\Tailscale\tailscale.exe" status | Out-Null
               Start-Sleep -Seconds 20
           }
