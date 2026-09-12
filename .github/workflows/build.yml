@@ -14,42 +14,23 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: NoMachine Dosyasını Google Drive'dan İndir ve Kur
+      - name: NoMachine ve Tailscale Kurulumu (Winget ile)
         shell: pwsh
         run: |
-          Write-Host "Google Drive'daki NoMachine dosyası indiriliyor..."
-          # Dosyanın ID'si: 1pwVYq0loU_qHZA4xJC6KmHEnUNiagmlO
-          $fileId = "1pwVYq0loU_qHZA4xJC6KmHEnUNiagmlO"
-          $url = "https://drive.google.com/uc?export=download&id=$fileId"
-          
-          # Büyük dosyalarda Google Drive uyarı sayfasını atlamak için cookie/session yönetimi
-          $uri = "https://drive.google.com/uc?export=download&id=$fileId"
-          $output = "nomachine.exe"
-          
-          # Invoke-WebRequest ile doğrudan indirme
-          $response = Invoke-WebRequest -Uri $uri -SessionVariable sv
-          if ($response.Content -match 'action="([^"]+)"') {
-              $formAction = $matches[1]
-              $response = Invoke-WebRequest -Uri $formAction -WebSession $sv -OutFile $output
-          } else {
-              $response = Invoke-WebRequest -Uri $uri -OutFile $output
-          }
+          Write-Host "NoMachine Winget ile kuruluyor..."
+          winget install --id NoMachine.NoMachine -e --accept-source-agreements --accept-package-agreements
 
-          Write-Host "NoMachine kuruluyor..."
-          Start-Process -FilePath "nomachine.exe" -ArgumentList "/verysilent /norestart" -Wait
+          Write-Host "Tailscale Winget ile kuruluyor..."
+          winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
 
-      - name: Tailscale Kurulumu ve Bağlantı
+      - name: Tailscale Bağlantısı ve IP Alma
         shell: pwsh
         run: |
-          Write-Host "Tailscale indiriliyor..."
-          $tailscaleUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
-          Invoke-WebRequest -Uri $tailscaleUrl -OutFile "tailscale-setup.exe"
-
-          Write-Host "Tailscale kuruluyor..."
-          Start-Process -FilePath "tailscale-setup.exe" -ArgumentList "/verysilent /norestart" -Wait
-          Start-Sleep -Seconds 5
+          Write-Host "Tailscale servsinin başlaması bekleniyor..."
+          Start-Sleep -Seconds 10
 
           Write-Host "Tailscale ağına bağlanılıyor..."
+          # Winget ile kurulduğunda tailscale komutunun yolu:
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ github.event.inputs.tailscale_authkey }} --hostname=github-windows-runner
 
           $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
