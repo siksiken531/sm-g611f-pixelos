@@ -1,12 +1,7 @@
-Name: RDP Tailscale Windows
+name: RDP Windows Simple
 
 on:
   workflow_dispatch:
-    inputs:
-      tailscale_authkey:
-        description: 'Tailscale Auth Key (tskey-auth-...)'
-        required: true
-        type: string
 
 jobs:
   run-windows:
@@ -17,10 +12,7 @@ jobs:
       - name: Kullanıcı Şifresini Ayarla ve RDP'yi Etkinleştir
         shell: pwsh
         run: |
-          Write-Host "runneradmin şifresi 'Password123!' olarak ayarlanıyor..."
           net user runneradmin Password123!
-          
-          Write-Host "Windows Uzak Masaüstü (RDP) etkinleştiriliyor..."
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
@@ -28,23 +20,16 @@ jobs:
       - name: Tailscale Kurulumu ve Bağlantı
         shell: pwsh
         run: |
-          Write-Host "Tailscale indiriliyor ve kuruluyor..."
           winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
           Start-Sleep -Seconds 10
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
 
-          Write-Host "Tailscale ağına bağlanılıyor..."
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ github.event.inputs.tailscale_authkey }} --hostname=github-windows-runner
-
-          $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-          Write-Host "==================================================" -ForegroundColor Green
-          Write-Host "TAILSCALE IP ADRESİNİZ: $tsIp" -ForegroundColor Cyan
-          Write-Host "==================================================" -ForegroundColor Green
-
-      - name: Oturumu Açık Tutma ve Tailscale Keep-Alive
+      - name: Oturumu Açık Tutma
         shell: pwsh
         run: |
-          Write-Host "Runner aktif ve Tailscale tüneli canlı tutuluyor..."
+          Write-Host "Runner aktif."
           while ($true) {
               & "C:\Program Files\Tailscale\tailscale.exe" status | Out-Null
               Start-Sleep -Seconds 20
           }
+          
