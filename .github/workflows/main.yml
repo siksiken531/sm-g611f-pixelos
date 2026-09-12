@@ -1,0 +1,50 @@
+Name: RDP Tailscale Windows
+
+on:
+  workflow_dispatch:
+    inputs:
+      tailscale_authkey:
+        description: 'Tailscale Auth Key (tskey-auth-...)'
+        required: true
+        type: string
+
+jobs:
+  run-windows:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Kullanıcı Şifresini Ayarla ve RDP'yi Etkinleştir
+        shell: pwsh
+        run: |
+          Write-Host "runneradmin şifresi 'Password123!' olarak ayarlanıyor..."
+          net user runneradmin Password123!
+          
+          Write-Host "Windows Uzak Masaüstü (RDP) etkinleştiriliyor..."
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+      - name: Tailscale Kurulumu ve Bağlantı
+        shell: pwsh
+        run: |
+          Write-Host "Tailscale indiriliyor ve kuruluyor..."
+          winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
+          Start-Sleep -Seconds 10
+
+          Write-Host "Tailscale ağına bağlanılıyor..."
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ github.event.inputs.tailscale_authkey }} --hostname=github-windows-runner
+
+          $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          Write-Host "==================================================" -ForegroundColor Green
+          Write-Host "TAILSCALE IP ADRESİNİZ: $tsIp" -ForegroundColor Cyan
+          Write-Host "==================================================" -ForegroundColor Green
+
+      - name: Oturumu Açık Tutma ve Tailscale Keep-Alive
+        shell: pwsh
+        run: |
+          Write-Host "Runner aktif ve Tailscale tüneli canlı tutuluyor..."
+          while ($true) {
+              & "C:\Program Files\Tailscale\tailscale.exe" status | Out-Null
+              Start-Sleep -Seconds 20
+          }
