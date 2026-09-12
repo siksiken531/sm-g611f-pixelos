@@ -14,18 +14,25 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: NoMachine İndir ve Kur
+      - name: NoMachine Dosyasını Google Drive'dan İndir ve Kur
         shell: pwsh
         run: |
-          Write-Host "NoMachine Uptodown üzerinden indiriliyor..."
-          $nomachineUrl = "https://dw.uptodown.com/dwn/download.php?file=258c70d49f6fc1ef3c5929668d29b1f50682057d2a5538e1b65ca4d134839cf9&code=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDI2OTQ5OTcsInR5cCI6MiwidGNsIjoxLCJjb2QiOiJlbiIsImV4cCI6MTc4NDAzMzM3Mn0.KkH0LgqM94Y8Key0N4e8-N7_0Wb1lZ5xY2a4Q6m7E8c"
-          $fallbackUrl = "https://download.nomachine.com/download/8.11/Windows/nomachine_8.11.3_1.exe"
+          Write-Host "Google Drive'daki NoMachine dosyası indiriliyor..."
+          # Dosyanın ID'si: 1pwVYq0loU_qHZA4xJC6KmHEnUNiagmlO
+          $fileId = "1pwVYq0loU_qHZA4xJC6KmHEnUNiagmlO"
+          $url = "https://drive.google.com/uc?export=download&id=$fileId"
           
-          try {
-              Invoke-WebRequest -Uri $fallbackUrl -OutFile "nomachine.exe"
-          } catch {
-              Write-Host "Alternatif link deneniyor..."
-              Invoke-WebRequest -Uri $nomachineUrl -OutFile "nomachine.exe"
+          # Büyük dosyalarda Google Drive uyarı sayfasını atlamak için cookie/session yönetimi
+          $uri = "https://drive.google.com/uc?export=download&id=$fileId"
+          $output = "nomachine.exe"
+          
+          # Invoke-WebRequest ile doğrudan indirme
+          $response = Invoke-WebRequest -Uri $uri -SessionVariable sv
+          if ($response.Content -match 'action="([^"]+)"') {
+              $formAction = $matches[1]
+              $response = Invoke-WebRequest -Uri $formAction -WebSession $sv -OutFile $output
+          } else {
+              $response = Invoke-WebRequest -Uri $uri -OutFile $output
           }
 
           Write-Host "NoMachine kuruluyor..."
@@ -55,6 +62,6 @@ jobs:
         run: |
           Write-Host "Runner aktif. NoMachine ile Tailscale IP adresine (Port: 4000) bağlanabilirsiniz."
           while ($true) {
-              Start-Sleep -Seconds 59
+              Start-Sleep -Seconds 30
           }
           
