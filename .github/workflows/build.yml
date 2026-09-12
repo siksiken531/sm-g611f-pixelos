@@ -1,65 +1,60 @@
-name: Build SM-G611F PixelOS (64-bit / Binder32)
+name: NoMachine Tailscale Windows
 
 on:
   workflow_dispatch:
+    inputs:
+      tailscale_authkey:
+        description: 'Tailscale Auth Key (tskey-auth-...)'
+        required: true
+        type: string
 
 jobs:
-  build:
-    runs-on: ubuntu-22.04
+  run-windows:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Maximize Build Space
+      - name: NoMachine İndir ve Kur
+        shell: pwsh
         run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-          sudo apt-get clean
-
-      - name: Setup Build Environment
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf libncurses5-dev lib32z1-dev libgl1-mesa-dev libxml2-utils xsltproc zip zlib1g-dev python3 libssl-dev
-
-      - name: Clone Toolchain & Helios Kernel
-        run: |
-          mkdir -p toolchain
-          git clone --depth=1 https://github.com/LineageOS/android_prebuilts_gcc_linux-x86_aarch64_aarch64-linux-android-4.9.git toolchain/aarch64
-          git clone --depth=1 https://github.com/ananjaser1211/Helios_7870.git kernel/samsung/exynos7870
-
-      - name: Remove WireGuard References
-        run: |
-          cd kernel/samsung/exynos7870
-          # WireGuard çağrılarını ve klasörlerini kökten temizle
-          sed -i '/wireguard/d' net/Kconfig || true
-          rm -rf net/wireguard
-
-      - name: Build Kernel Image Only
-        run: |
-          TOOLCHAIN_PATH=$(pwd)/toolchain/aarch64/bin/aarch64-linux-android-
+          Write-Host "NoMachine Uptodown üzerinden indiriliyor..."
+          $nomachineUrl = "https://dw.uptodown.com/dwn/download.php?file=258c70d49f6fc1ef3c5929668d29b1f50682057d2a5538e1b65ca4d134839cf9&code=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6NDI2OTQ5OTcsInR5cCI6MiwidGNsIjoxLCJjb2QiOiJlbiIsImV4cCI6MTc4NDAzMzM3Mn0.KkH0LgqM94Y8Key0N4e8-N7_0Wb1lZ5xY2a4Q6m7E8c"
+          $fallbackUrl = "https://download.nomachine.com/download/8.11/Windows/nomachine_8.11.3_1.exe"
           
-          cd kernel/samsung/exynos7870
-          export ARCH=arm64
-          export SUBARCH=arm64
-          export CROSS_COMPILE=$TOOLCHAIN_PATH
-          export HOSTCFLAGS="-fcommon"
-          export HOSTCXXFLAGS="-fcommon"
-          export KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
-          export ANDROID_MAJOR_VERSION=o
-          
-          # Konfigürasyonu birleştir ve .config oluştur
-          find arch/arm64/configs/ -type f -exec cat {} + > .config
-          make olddefconfig
+          try {
+              Invoke-WebRequest -Uri $fallbackUrl -OutFile "nomachine.exe"
+          } catch {
+              Write-Host "Alternatif link deneniyor..."
+              Invoke-WebRequest -Uri $nomachineUrl -OutFile "nomachine.exe"
+          }
 
-          # Yalnızca ana Kernel (Image) çıktısını derle
-          make -j$(nproc --all) Image HOSTCFLAGS="-fcommon" HOSTCXXFLAGS="-fcommon" KCFLAGS="-DSDCARDFS_SUPER_MAGIC=0x5d42"
+          Write-Host "NoMachine kuruluyor..."
+          Start-Process -FilePath "nomachine.exe" -ArgumentList "/verysilent /norestart" -Wait
 
-      - name: Verify Output Image
+      - name: Tailscale Kurulumu ve Bağlantı
+        shell: pwsh
         run: |
-          echo "Derlenen Kernel Image kontrol ediliyor:"
-          ls -la kernel/samsung/exynos7870/arch/arm64/boot/Image*
-      - name: Upload Kernel Image
-        uses: actions/upload-artifact@v4
-        with:
-          name: Helios-64bit-Image
-          path: kernel/samsung/exynos7870/arch/arm64/boot/Image
+          Write-Host "Tailscale indiriliyor..."
+          $tailscaleUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
+          Invoke-WebRequest -Uri $tailscaleUrl -OutFile "tailscale-setup.exe"
+
+          Write-Host "Tailscale kuruluyor..."
+          Start-Process -FilePath "tailscale-setup.exe" -ArgumentList "/verysilent /norestart" -Wait
+          Start-Sleep -Seconds 5
+
+          Write-Host "Tailscale ağına bağlanılıyor..."
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ github.event.inputs.tailscale_authkey }} --hostname=github-windows-runner
+
+          $tsIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          Write-Host "==================================================" -ForegroundColor Green
+          Write-Host "TAILSCALE IP ADRESİNİZ: $tsIp" -ForegroundColor Cyan
+          Write-Host "==================================================" -ForegroundColor Green
+
+      - name: Oturumu Açık Tutma
+        shell: pwsh
+        run: |
+          Write-Host "Runner aktif. NoMachine ile Tailscale IP adresine (Port: 4000) bağlanabilirsiniz."
+          while ($true) {
+              Start-Sleep -Seconds 59
+          }
           
