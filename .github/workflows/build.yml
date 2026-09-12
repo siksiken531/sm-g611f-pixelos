@@ -17,8 +17,8 @@ jobs:
       - name: Kullanıcı Şifresini Ayarla
         shell: pwsh
         run: |
-          Write-Host "runneradmin şifresi siksiken' olarak ayarlanıyor..."
-          net user runneradmin siksiken
+          Write-Host "runneradmin şifresi 'Password123!' olarak ayarlanıyor..."
+          net user runneradmin Password123!
 
       - name: NoMachine ve Tailscale Kurulumu (Winget ile)
         shell: pwsh
