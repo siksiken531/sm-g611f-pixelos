@@ -40,11 +40,12 @@ jobs:
           Write-Host "TAILSCALE IP ADRESİNİZ: $tsIp" -ForegroundColor Cyan
           Write-Host "==================================================" -ForegroundColor Green
 
-      - name: Oturumu Açık Tutma
+            - name: Oturumu Açık Tutma ve Tailscale Keep-Alive
         shell: pwsh
         run: |
-          Write-Host "Runner aktif. Telefonunuzdaki Microsoft Remote Desktop uygulaması ile Tailscale IP adresine bağlanabilirsiniz."
+          Write-Host "Runner aktif ve Tailscale tüneli canlı tutuluyor..."
           while ($true) {
-              Start-Sleep -Seconds 30
+              # Tailscale'in bağlantıda kalmasını tetikle
+              & "C:\Program Files\Tailscale\tailscale.exe" status | Out-Null
+              Start-Sleep -Seconds 20
           }
-          
