@@ -1,4 +1,4 @@
-name: TurboVNC Session
+name: TurboVNC TCP Tunnel
 
 on:
   workflow_dispatch:
@@ -33,26 +33,28 @@ jobs:
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: Tailscale Kurulumu ve TurboVNC Başlatma
+      - name: TurboVNC Başlatma ve TCP Tüneli
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
-          sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
-          
-          # Portu tüm dış arayüzlere açan ve dinleme kısıtlamasını kaldıran kesin komut:
+          # TurboVNC sunucusunu dış bağlantılara tamamen açık şekilde başlatıyoruz
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd -interface 0.0.0.0
           
-          # Portun dinleyip dinlemediğini konsola basalım
-          netstat -an | grep 5901 || ss -tulpn | grep 5901
+          # Cloudflare tünel aracını indiriyoruz
+          curl -L --output cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
+          chmod +x cloudflared
+          sudo mv cloudflared /usr/local/bin/
           
-          tsIp=$(tailscale ip -4)
           echo "=================================================="
-          echo "TAILSCALE IP VE VNC PORTU: $tsIp:5901"
+          echo "TURBOVNC İÇİN CLOUDFLARE TCP TÜNELİ BAŞLATILIYOR..."
           echo "=================================================="
+          
+          # Doğrudan VNC portunu (5901) TCP üzerinden tünelliyoruz
+          cloudflared tunnel --url tcp://localhost:5901 &
+          
+          sleep 12
 
       - name: Oturumu Açık Tutma
         run: |
           while true; do
-              tailscale status > /dev/null
-              sleep 20
+              sleep 30
           done
           
