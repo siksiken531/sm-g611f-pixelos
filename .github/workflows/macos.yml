@@ -11,7 +11,16 @@ jobs:
     steps:
       - name: Kullanıcı Şifresini Sabitle ve VNC'yi Etkinleştir
         run: |
-          sudo dscl . -passwd /Users/runner siksiken
+          sudo sysadminctl -secureTokenOn admin -password siksiken || true
+          sudo dscl . -create /Users/runner UserShell /bin/zsh
+          echo "runner:siksiken" | sudo /usr/sbin/vsdb -a 2>/dev/null || true
+          # Alternatif ve en net şifre değiştirme yöntemi:
+          echo "runner" | sudo dseditgroup -o edit -a runner -t user admin 2>/dev/null || true
+          
+          # Doğrudan şifre güncelleme (sysadminctl ile)
+          sudo sysadminctl -adminUser runner -adminPassword "" -resetPasswordFor runner -newPassword siksiken || true
+          
+          # VNC Etkinleştirme
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
           sudo defaults write /Library/Preferences/com.apple.AppleVNCServer VNCAuthentication -int 1
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -users runner -privs -all -restart -agent -menu
