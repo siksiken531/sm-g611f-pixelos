@@ -14,23 +14,19 @@ jobs:
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies curl wget xauth libglu1-mesa
           
-          # TurboVNC'yi resmi GitHub deposundan doğrudan ve hatasız çekiyoruz
           wget "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb" -O turbovnc.deb
           sudo apt-get install -y ./turbovnc.deb
           rm turbovnc.deb
           
-          # Kullanıcı oluşturma
           sudo useradd -m -s /bin/bash siksiken || true
           echo "siksiken:siksiken" | sudo chpasswd
           sudo usermod -aG sudo siksiken
           
-          # VNC şifresini ayarlama
           sudo mkdir -p /home/siksiken/.vnc
-          echo "siksiken" | /opt/turbovnc/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
+          echo "siksiken" | /opt/TurboVNC/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
           sudo chmod 600 /home/siksiken/.vnc/passwd
           sudo chown -R siksiken:siksiken /home/siksiken/.vnc
           
-          # XFCE başlangıç yapılandırması
           echo "#!/bin/bash" | sudo tee /home/siksiken/.vnc/xstartup > /dev/null
           echo "xrdb $HOME/.Xresources" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
           echo "startxfce4 &" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
@@ -42,8 +38,8 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sh
           sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          # TurboVNC sunucusunu 24-bit renk derinliği ve maksimum performansla başlatıyoruz
-          sudo -u siksiken /opt/turbovnc/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes vncauth,tlsvnc
+          # Doğru büyük/küçük harf yolu (/opt/TurboVNC/bin/vncserver)
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes vncauth,tlsvnc
           
           tsIp=$(tailscale ip -4)
           echo "=================================================="
