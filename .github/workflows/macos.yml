@@ -11,7 +11,7 @@ jobs:
     steps:
       - name: Kullanıcı Şifresini Sabitle ve VNC'yi Etkinleştir
         run: |
-          sudo echo "runner:siksiken" | sudo chpasswd
+          sudo dscl . -passwd /Users/runner siksiken
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
           sudo defaults write /Library/Preferences/com.apple.AppleVNCServer VNCAuthentication -int 1
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -users runner -privs -all -restart -agent -menu
