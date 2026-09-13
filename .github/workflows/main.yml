@@ -12,11 +12,10 @@ jobs:
       - name: TurboVNC ve XFCE Kurulumu
         run: |
           sudo apt-get update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies curl wget xauth
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies curl wget xauth libglu1-mesa
           
-          # TurboVNC resmi paketini indirip kuruyoruz (En güncel sürüm için)
-          TURBOVNC_VERSION="3.1.1"
-          wget "https://sourceforge.net/projects/turbovnc/files/$TURBOVNC_VERSION/turbovnc_${TURBOVNC_VERSION}_amd64.deb" -O turbovnc.deb
+          # TurboVNC'yi resmi GitHub deposundan doğrudan ve hatasız çekiyoruz
+          wget "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb" -O turbovnc.deb
           sudo apt-get install -y ./turbovnc.deb
           rm turbovnc.deb
           
@@ -43,7 +42,7 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sh
           sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          # TurboVNC sunucusunu 24-bit renk derinliğiyle başlatıyoruz (:1 -> port 5901)
+          # TurboVNC sunucusunu 24-bit renk derinliği ve maksimum performansla başlatıyoruz
           sudo -u siksiken /opt/turbovnc/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes vncauth,tlsvnc
           
           tsIp=$(tailscale ip -4)
