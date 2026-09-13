@@ -1,48 +1,59 @@
-name: Windows RDP Session
+name: TurboVNC Session
 
 on:
   workflow_dispatch:
 
 jobs:
-  run-windows:
-    runs-on: windows-latest
+  run-turbovnc:
+    runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Şifre Politikasını Devre Dışı Bırak ve Kullanıcı Oluştur
+      - name: TurboVNC ve XFCE Kurulumu
         run: |
-          secedit /export /cfg C:\secpol.cfg
-          (Get-Content C:\secpol.cfg).replace("PasswordComplexity = 1", "PasswordComplexity = 0") | Set-Content C:\secpol.cfg
-          secedit /configure /db C:\windows\security\database\secpol.sdb /cfg C:\secpol.cfg /areas SECURITYPOLICY
-          gpupdate /force
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies curl wget xauth
+          
+          # TurboVNC resmi paketini indirip kuruyoruz (En güncel sürüm için)
+          TURBOVNC_VERSION="3.1.1"
+          wget "https://sourceforge.net/projects/turbovnc/files/$TURBOVNC_VERSION/turbovnc_${TURBOVNC_VERSION}_amd64.deb" -O turbovnc.deb
+          sudo apt-get install -y ./turbovnc.deb
+          rm turbovnc.deb
+          
+          # Kullanıcı oluşturma
+          sudo useradd -m -s /bin/bash siksiken || true
+          echo "siksiken:siksiken" | sudo chpasswd
+          sudo usermod -aG sudo siksiken
+          
+          # VNC şifresini ayarlama
+          sudo mkdir -p /home/siksiken/.vnc
+          echo "siksiken" | /opt/turbovnc/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
+          sudo chmod 600 /home/siksiken/.vnc/passwd
+          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
+          
+          # XFCE başlangıç yapılandırması
+          echo "#!/bin/bash" | sudo tee /home/siksiken/.vnc/xstartup > /dev/null
+          echo "xrdb $HOME/.Xresources" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
+          echo "startxfce4 &" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
+          sudo chmod +x /home/siksiken/.vnc/xstartup
+          sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-          net user siksiken siksiken /add
-          net localgroup administrators siksiken /add
-          net accounts /maxpwage:unlimited
-
-      - name: RDP Servisini Etkinleştir
+      - name: Tailscale Kurulumu ve TurboVNC Başlatma
         run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-
-      - name: Winget ile Tailscale Kurulumu ve Bağlantı
-        run: |
-          # Winget onay ekranlarına takılmadan direkt kurar
-          winget install --id Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          # Komut satırı yolunun güncellenmesi için kısa bir bekleme
-          Start-Sleep -Seconds 10
+          # TurboVNC sunucusunu 24-bit renk derinliğiyle başlatıyoruz (:1 -> port 5901)
+          sudo -u siksiken /opt/turbovnc/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes vncauth,tlsvnc
           
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
-          
-          $tsIp = (& "C:\Program Files\Tailscale\tailscale.exe" ip -4)
-          Write-Output "=================================================="
-          Write-Output "TAILSCALE IP ADRESİNİZ (RDP için): $tsIp"
-          Write-Output "=================================================="
+          tsIp=$(tailscale ip -4)
+          echo "=================================================="
+          echo "TAILSCALE IP VE VNC PORTU: $tsIp:5901"
+          echo "=================================================="
 
       - name: Oturumu Açık Tutma
         run: |
-          while ($true) {
-              Start-Sleep -Seconds 20
-          }
+          while true; do
+              tailscale status > /dev/null
+              sleep 20
+          done
