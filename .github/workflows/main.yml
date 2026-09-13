@@ -1,4 +1,4 @@
-name: TurboVNC None Auth Bore
+name: TurboVNC Stable Auth Bore
 
 on:
   workflow_dispatch:
@@ -23,16 +23,20 @@ jobs:
           sudo usermod -aG sudo siksiken
           
           sudo mkdir -p /home/siksiken/.vnc
+          echo "siksiken" | /opt/TurboVNC/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
+          sudo chmod 600 /home/siksiken/.vnc/passwd
+          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
+          
           echo "#!/bin/bash" | sudo tee /home/siksiken/.vnc/xstartup > /dev/null
           echo "xrdb $HOME/.Xresources" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
           echo "startxfce4 &" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
           sudo chmod +x /home/siksiken/.vnc/xstartup
-          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
+          sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: TurboVNC None Güvenlik ile Başlatma ve Bore Tüneli
+      - name: TurboVNC Başlatma ve Bore Tüneli
         run: |
-          # Şifre dosyası yerine -securitytypes None kullanarak el sıkışma hatasını tamamen ortadan kaldırıyoruz
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes None
+          # Doğru şifre dosyası parametresiyle sunucuyu kararlı şekilde başlatıyoruz
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -rfbauth /home/siksiken/.vnc/passwd
           
           echo "Aktif dinlenen portlar:"
           sudo netstat -tuln | grep 590
@@ -54,4 +58,3 @@ jobs:
           while true; do
               sleep 30
           done
-          
