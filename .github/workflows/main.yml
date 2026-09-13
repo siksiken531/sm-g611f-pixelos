@@ -1,4 +1,4 @@
-name: TurboVNC Bore Pub
+name: TurboVNC Pinggy Tunnel
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
       - name: TurboVNC ve XFCE Kurulumu
         run: |
           sudo apt-get update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies wget curl xauth libglu1-mesa
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies wget curl xauth libglu1-mesa openssh-client
           
           wget "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb" -O turbovnc.deb
           sudo apt-get install -y ./turbovnc.deb
@@ -33,25 +33,19 @@ jobs:
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: TurboVNC ve Bore Pub Başlatma
+      - name: TurboVNC Başlatma ve Pinggy TCP Tüneli
         run: |
-          # VNC sunucusunu başlatıyoruz
+          # VNC sunucusunu şifre doğrulaması net olacak şekilde başlatıyoruz
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
           
-          # Bore aracını indirip kuruyoruz
-          curl -L https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz -o bore.tar.gz
-          tar -xvf bore.tar.gz
-          chmod +x bore
-          sudo mv bore /usr/local/bin/
-          
           echo "=================================================="
-          echo "BORE.PUB TCP TÜNELİ BAŞLATILIYOR..."
+          echo "PİNGGY TCP TÜNELİ BAŞLATILIYOR..."
           echo "=================================================="
           
-          # Doğrudan bore.pub üzerinden portu dışarıya açıyoruz
-          bore local 5901 --to bore.pub &
+          # SSH üzerinden kararlı TCP tüneli açıyoruz
+          ssh -o StrictHostKeyChecking=no -R 0:localhost:5901 a.pinggy.io &
           
-          sleep 8
+          sleep 10
 
       - name: Oturumu Açık Tutma
         run: |
