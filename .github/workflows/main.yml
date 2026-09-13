@@ -11,21 +11,22 @@ jobs:
     steps:
       - name: TurboVNC Kurulumu
         run: |
-          # Doğrudan GitHub üzerindeki resmi TurboVNC yayın adresinden indiriyoruz
           $url = "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/TurboVNC-3.1.1-x64.exe"
           $output = "$PSScriptRoot\turbovnc.exe"
           Invoke-WebRequest -Uri $url -OutFile $output
-          
           Start-Process -FilePath "$PSScriptRoot\turbovnc.exe" -ArgumentList "/verysilent /supressmsgboxes /norestart" -Wait
           Write-Host "TurboVNC basariyla kuruldu!"
 
-      - name: Tailscale Kurulumu ve Ag Baglantisi
+      - name: Tailscale Kurulumu ve Ag Baglantisi (Winget)
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          Invoke-WebRequest -Uri https://pkgs.tailscale.com/stable/tailscale-setup-amd64.msi -OutFile tailscale-setup.msi
-          Start-Process msiexec.exe -Wait -ArgumentList '/i tailscale-setup.msi /quiet /norestart'
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTHKEY --hostname=windows-turbovnc
+          # Tailscale'i Winget ile kuruyoruz
+          winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
+          
+          # Tailscale servisini baslatip hesaba baglaniyoruz
+          $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
+          & $tailscalePath up --authkey=$env:TAILSCALE_AUTHKEY --hostname=windows-turbovnc
           Write-Host "Tailscale baglantisi kuruldu!"
 
       - name: TurboVNC Sunucusunu Baslatma
@@ -42,3 +43,4 @@ jobs:
           while ($true) {
               Start-Sleep -Seconds 30
           }
+          
