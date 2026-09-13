@@ -21,7 +21,10 @@ jobs:
         env:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
+          # msstore kaynak hatasını atlayıp doğrudan winget deposundan kuruyoruz
+          winget install --id Tailscale.Tailscale --source winget -e --accept-source-agreements --accept-package-agreements
+          
+          # Tailscale servisini başlatıp hesaba bağlanıyoruz
           $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
           & $tailscalePath up --authkey=$env:TAILSCALE_AUTHKEY --hostname=windows-turbovnc
           Write-Host "Tailscale baglantisi kuruldu!"
@@ -32,7 +35,6 @@ jobs:
           if (!(Test-Path $vncPath)) {
               $vncPath = "C:\Program Files\TurboVNC\vncserver.exe"
           }
-          # Dosya yolundaki boşluk sorununu önlemek için tam tırnak içinde çalıştırıyoruz
           Start-Process -FilePath '"' + $vncPath + '"' -ArgumentList "-geometry 1280x720 -depth 24" -NoNewWindow
           Write-Host "TurboVNC sunucusu baslatildi!"
 
@@ -41,3 +43,4 @@ jobs:
           while ($true) {
               Start-Sleep -Seconds 30
           }
+          
