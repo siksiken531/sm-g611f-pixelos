@@ -1,4 +1,4 @@
-name: TurboVNC Bore Stable
+name: TurboVNC NoSecurity Bore
 
 on:
   workflow_dispatch:
@@ -23,19 +23,16 @@ jobs:
           sudo usermod -aG sudo siksiken
           
           sudo mkdir -p /home/siksiken/.vnc
-          echo "siksiken" | /opt/TurboVNC/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
-          sudo chmod 600 /home/siksiken/.vnc/passwd
-          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
-          
           echo "#!/bin/bash" | sudo tee /home/siksiken/.vnc/xstartup > /dev/null
           echo "xrdb $HOME/.Xresources" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
           echo "startxfce4 &" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
           sudo chmod +x /home/siksiken/.vnc/xstartup
-          sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
+          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
 
-      - name: TurboVNC Başlatma ve Bore Tüneli
+      - name: TurboVNC Güvenliksiz (None) Başlatma ve Bore Tüneli
         run: |
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
+          # -securitytypes None diyerek VNC protokol el sıkışma hatasını tamamen ortadan kaldırıyoruz
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes None
           
           curl -L https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz -o bore.tar.gz
           tar -xvf bore.tar.gz
