@@ -38,8 +38,11 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sh
           sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          # -interface 0.0.0.0 parametresi eklendi, böylece Tailscale üzerinden gelen bağlantılara port açılır
+          # Portu tüm dış arayüzlere açan ve dinleme kısıtlamasını kaldıran kesin komut:
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd -interface 0.0.0.0
+          
+          # Portun dinleyip dinlemediğini konsola basalım
+          netstat -an | grep 5901 || ss -tulpn | grep 5901
           
           tsIp=$(tailscale ip -4)
           echo "=================================================="
