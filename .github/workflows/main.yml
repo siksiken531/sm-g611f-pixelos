@@ -1,48 +1,45 @@
-name: Windows RDP via Tailscale Winget
+name: Windows RDP Session
 
 on:
   workflow_dispatch:
 
 jobs:
-  rdp-session:
+  run-windows:
     runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Tailscale'i Winget ile Kur
-        shell: powershell
+      - name: Şifre Politikasını Devre Dışı Bırak ve Kullanıcı Oluştur
         run: |
-          winget install --id Tailscale.Tailscale --silent --accept-package-agreements --accept-source-agreements
+          # Windows şifre karmaşıklığı gereksinimini kapatıyoruz
+          secedit /export /cfg C:\secpol.cfg
+          (Get-Content C:\secpol.cfg).replace("PasswordComplexity = 1", "PasswordComplexity = 0") | Set-Content C:\secpol.cfg
+          secedit /configure /db C:\windows\security\database\secpol.sdb /cfg C:\secpol.cfg /areas SECURITYPOLICY
+          gpupdate /force
 
-      - name: Tailscale Giriş Bağlantısını Üret ve Bağlan
-        shell: powershell
-        run: |
-          & "C:\Program Files\Tailscale\tailscale.exe" up
-          
-      - name: Kullanıcı Adı ve Şifreyi Ayarla
-        shell: powershell
-        run: |
+          # Kullanıcı adı ve istediğin şifreyi tanımlıyoruz
           net user siksiken siksiken /add
           net localgroup administrators siksiken /add
-          net user runneradmin siksiken
+          net accounts /maxpwage:unlimited
 
       - name: RDP Servisini Etkinleştir
-        shell: powershell
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          
-      - name: Tailscale IP Adresini Yazdır ve Oturumu Açık Tut
-        shell: powershell
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+
+      - name: Tailscale Kurulumu ve Bağlantı
         run: |
-          $tailscaleIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-          Write-Host "==========================================" -ForegroundColor Green
-          Write-Host "Tailscale IP Adresin : $tailscaleIp" -ForegroundColor Yellow
-          Write-Host "Kullanıcı Adı        : siksiken" -ForegroundColor Cyan
-          Write-Host "Şifre                : siksiken" -ForegroundColor Cyan
-          Write-Host "==========================================" -ForegroundColor Green
+          winget install Tailscale.Tailscale
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          $timeout = [System.Diagnostics.Stopwatch]::StartNew()
-          while ($timeout.Elapsed.TotalHours -lt 5.8) {
-              Start-Sleep -Seconds 60
+          $tsIp = (& "C:\Program Files\Tailscale\tailscale.exe" ip -4)
+          Write-Output "=================================================="
+          Write-Output "TAILSCALE IP ADRESİNİZ (RDP için): $tsIp"
+          Write-Output "=================================================="
+
+      - name: Oturumu Açık Tutma
+        run: |
+          while ($true) {
+              Start-Sleep -Seconds 20
           }
