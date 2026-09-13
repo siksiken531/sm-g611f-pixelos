@@ -1,4 +1,4 @@
-name: TurboVNC TCP Tunnel
+name: TurboVNC Bore Tunnel
 
 on:
   workflow_dispatch:
@@ -33,7 +33,29 @@ jobs:
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: TurboVNC Başlatma ve TCP Tüneli
+      - name: TurboVNC Başlatma ve Bore TCP Tüneli
+        run: |
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
+          
+          # Saf TCP tüneli için 'bore' aracını indiriyoruz
+          curl -L https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz -o bore.tar.gz
+          tar -xvf bore.tar.gz
+          chmod +x bore
+          sudo mv bore /usr/local/bin/
+          
+          echo "=================================================="
+          echo "BORE TCP TÜNELİ BAŞLATILIYOR (VNC Port: 5901)"
+          echo "=================================================="
+          
+          # Bore ile portu kamuya açık bir TCP portuna yönlendiriyoruz
+          bore local 5901 --to bore.pub &
+          sleep 5
+
+      - name: Oturumu Açık Tutma
+        run: |
+          while true; do
+              sleep 30
+          done
         run: |
           # TurboVNC sunucusunu dış bağlantılara tamamen açık şekilde başlatıyoruz
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd -interface 0.0.0.0
