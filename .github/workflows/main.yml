@@ -8,52 +8,42 @@ jobs:
   turbovnc:
     runs-on: windows-latest
     steps:
-      - name: Şifre Politikasını Geçici Kaldır
+      - name: TurboVNC Kur
         run: |
-          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters" /v "MinimumPasswordLength" /t REG_DWORD /d 3 /f
-          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters" /v "PasswordComplexity" /t REG_DWORD /d 0 /f
-          gpupdate /force
-        shell: powershell
-        run-as-admin: true
-
-      - name: TurboVNC İndir & Kur
-        run: |
-          $installerUrl = "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe"
-          $installerPath = "$env:TEMP\TurboVNC-3.3.1-x64.exe"
-          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-          Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+          $url = "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe"
+          $out = "$env:TEMP\vnc.exe"
+          Invoke-WebRequest $url -OutFile $out
+          Start-Process $out /VERYSILENT -Wait
         shell: powershell
 
-      - name: Kullanıcı Oluştur (Kendi istediğin şifreyle!)
+      - name: Kullanıcı Oluştur
         run: |
           $user = "siksiken"
-          $pass = ConvertTo-SecureString "siksiken" -AsPlainText -Force
-          New-LocalUser -Name $user -Password $pass -FullName "Eğlence Kullanıcısı" -AccountNeverExpires -PasswordNeverExpires
-          Add-LocalGroupMember -Group "Administrators" -Member $user
+          # Windows kabul edecek format: 8+ karakter + harf+rakam
+          $pass = ConvertTo-SecureString "siksiken123" -AsPlainText -Force
+          New-LocalUser -Name $user -Password $pass -FullName "Eğlence" -AccountNeverExpires -PasswordNeverExpires
+          Add-LocalGroupMember Administrators $user
         shell: powershell
 
-      - name: VNC Şifresini Ayarla
+      - name: VNC Şifresi
         run: |
-          $vncPass = "siksiken"
           $vncPath = "C:\Program Files\TurboVNC\bin"
-          Set-Content -Path "$env:TEMP\vncpw.txt" -Value $vncPass
-          & "$vncPath\vncpasswd.exe" -f "$env:TEMP\vncpw.txt"
+          "siksiken123" | & "$vncPath\vncpasswd.exe" -f
         shell: powershell
 
-      - name: TurboVNC Sunucuyu Başlat
+      - name: VNC Başlat
         run: |
-          $vncBin = "C:\Program Files\TurboVNC\bin"
-          Start-Process -FilePath "$vncBin\vncserver.exe" -ArgumentList "-geometry 1280x720 -depth 24"
-          Start-Sleep -Seconds 5
+          Start-Process "C:\Program Files\TurboVNC\bin\vncserver.exe" -ArgumentList "-geometry 1280x720"
+          Start-Sleep 5
         shell: powershell
 
-      - name: Bağlantı Bilgilerini Göster
+      - name: Bilgiler
         run: |
-          Write-Host "================================"
-          Write-Host "Kullanıcı adı: siksiken"
-          Write-Host "Şifre: siksiken"
-          Write-Host "VNC Port: 5901"
-          Write-Host "================================"
-          while ($true) { Start-Sleep 60 }
+          Write-Host "========================"
+          Write-Host "Kullanıcı: siksiken"
+          Write-Host "Şifre:     siksiken123"
+          Write-Host "Port:      5901"
+          Write-Host "========================"
+          while ($true) { Start-Sleep 3600 }
         shell: powershell
         
