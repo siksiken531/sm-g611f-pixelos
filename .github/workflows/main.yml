@@ -1,4 +1,4 @@
-name: TurboVNC Pinggy Tunnel
+name: TurboVNC Bore Stable
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
       - name: TurboVNC ve XFCE Kurulumu
         run: |
           sudo apt-get update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies wget curl xauth libglu1-mesa openssh-client
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies wget curl xauth libglu1-mesa
           
           wget "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb" -O turbovnc.deb
           sudo apt-get install -y ./turbovnc.deb
@@ -33,19 +33,21 @@ jobs:
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: TurboVNC Başlatma ve Pinggy TCP Tüneli
+      - name: TurboVNC Başlatma ve Bore Tüneli
         run: |
-          # VNC sunucusunu şifre doğrulaması net olacak şekilde başlatıyoruz
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
           
+          curl -L https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz -o bore.tar.gz
+          tar -xvf bore.tar.gz
+          chmod +x bore
+          sudo mv bore /usr/local/bin/
+          
           echo "=================================================="
-          echo "PİNGGY TCP TÜNELİ BAŞLATILIYOR..."
+          echo "BORE TCP TÜNELİ BAŞLATILIYOR..."
           echo "=================================================="
           
-          # SSH üzerinden kararlı TCP tüneli açıyoruz
-          ssh -o StrictHostKeyChecking=no -R 0:localhost:5901 a.pinggy.io &
-          
-          sleep 10
+          bore local 5901 --to bore.pub &
+          sleep 6
 
       - name: Oturumu Açık Tutma
         run: |
