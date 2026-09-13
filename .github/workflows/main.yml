@@ -11,7 +11,7 @@ jobs:
       - name: TurboVNC Kur
         run: |
           winget install --id VirtualGL.TurboVNC -e --accept-source-agreements --accept-package-agreements
-          Start-Sleep -Seconds 10
+          Start-Sleep -Seconds 15
         shell: powershell
 
       - name: Tailscale Kur ve Bağla
@@ -19,7 +19,7 @@ jobs:
           TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
           choco install tailscale -y --no-progress
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="$env:TAILSCALE_AUTHKEY" --hostname=gh-win-vnc-$env:GITHUB_RUN_ID
+          Start-Process -FilePath "C:\Program Files\Tailscale\tailscale.exe" -ArgumentList "up --authkey=$env:TAILSCALE_AUTHKEY --hostname=gh-win-vnc-$env:GITHUB_RUN_ID" -Wait
           Start-Sleep -Seconds 5
           $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
@@ -29,11 +29,13 @@ jobs:
         env:
           VNC_PASS: sifre123
         run: |
+          # Yolları kontrol et
           $vncPaths = @(
             "C:\Program Files\TurboVNC\bin",
             "C:\Program Files\VirtualGL\TurboVNC\bin",
             "C:\Program Files\TurboVNC"
           )
+          
           $binDir = $null
           foreach ($p in $vncPaths) {
             if (Test-Path "$p\vncserver.exe") {
@@ -41,32 +43,49 @@ jobs:
               break
             }
           }
-          if (-not $binDir) { Write-Error "TurboVNC bulunamadı"; exit 1 }
-          Write-Host "Bulundu: $binDir"
-
-          $passDir = "$env:USERPROFILE\.vnc"
-          $passFile = "$passDir\passwd"
-          New-Item -ItemType Directory -Path $passDir -Force | Out-Null
-
-          $env:VNC_PASS | & "$binDir\vncpasswd.exe" $passFile
-
-          & "$binDir\vncserver.exe" :0 -geometry 1280x720 -rfbport 5900 -rfbauth $passFile -interface 0.0.0.0
+          
+          if (-not $binDir) {
+            Write-Error "❌ TurboVNC bulunamadi"
+            exit 1
+          }
+          
+          Write-Host "✅ Bulundu: $binDir"
+          
+          # Şifre dosyası yolu
+          $passDir = Join-Path $env:USERPROFILE ".vnc"
+          $passFile = Join-Path $passDir "passwd"
+          
+          if (-not (Test-Path $passDir)) {
+            New-Item -ItemType Directory -Path $passDir -Force | Out-Null
+          }
+          
+          # Şifre oluştur — doğru yöntem
+          $passInput = "$env:VNC_PASS`n$env:VNC_PASS`n"
+          $passInput | & "$binDir\vncpasswd.exe" $passFile
+          
+          # VNC sunucuyu başlat
+          $vncExe = Join-Path $binDir "vncserver.exe"
+          & $vncExe :0 -geometry 1280x720 -rfbport 5900 -rfbauth $passFile -interface 0.0.0.0
+          
           Start-Sleep -Seconds 3
-          Write-Host "VNC hazır — Port 5900"
+          Write-Host "✅ VNC hazir — Port 5900"
         shell: powershell
 
       - name: Bağlantı Bilgileri
         run: |
-          Write-Host "=== AVNC BAGLANTI ==="
+          Write-Host ""
+          Write-Host "=================================="
+          Write-Host "✅ AVNC BAGLANTI BILGILERI"
           Write-Host "Tailscale IP: $env:TAILSCALE_IP"
           Write-Host "Port: 5900"
           Write-Host "Sifre: sifre123"
           Write-Host "Süre: 6 saat"
+          Write-Host "=================================="
         shell: powershell
 
       - name: 6 Saat Beklet
         run: |
-          Write-Host "Açık, 6 saat bekliyor..."
+          Write-Host "Açik, 6 saat bekliyor..."
           Start-Sleep -Seconds 21600
         shell: powershell
         
