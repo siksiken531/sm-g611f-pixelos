@@ -38,8 +38,8 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sh
           sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          # Geçersiz -nolocalhost parametresi kaldırıldı
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
+          # -interface 0.0.0.0 parametresi eklendi, böylece Tailscale üzerinden gelen bağlantılara port açılır
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd -interface 0.0.0.0
           
           tsIp=$(tailscale ip -4)
           echo "=================================================="
@@ -52,3 +52,4 @@ jobs:
               tailscale status > /dev/null
               sleep 20
           done
+          
