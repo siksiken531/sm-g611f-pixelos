@@ -1,0 +1,34 @@
+name: macOS Tailscale Simple
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-macos:
+    runs-on: macos-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Ekran Paylaşımını (VNC) Etkinleştir
+        shell: zsh
+        run: |
+          sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
+          sudo defaults write /Library/Preferences/com.apple.AppleVNCServer VNCAuthentication -int 1
+          sudo defaults write /Library/Preferences/com.apple.AppleVNCServer Password -string "password123"
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -users admin -privs -all -restart -agent -menu
+
+      - name: Tailscale Kurulumu ve Bağlantı
+        shell: zsh
+        run: |
+          brew install --cask tailscale
+          sudo /Applications/Tailscale.app/Contents/MacOS/Tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
+
+      - name: Oturumu Açık Tutma
+        shell: zsh
+        run: |
+          echo "macOS runner aktif."
+          while true; do
+              /Applications/Tailscale.app/Contents/MacOS/Tailscale status > /dev/null
+              sleep 20
+          done
+          
