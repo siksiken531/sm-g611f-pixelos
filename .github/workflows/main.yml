@@ -29,11 +29,21 @@ jobs:
 
       - name: TurboVNC Sunucusunu Baslatma
         run: |
-          $vncPath = "C:\Program Files\TurboVNC\vncserver.bat"
-          if (!(Test-Path $vncPath)) {
-              $vncPath = "C:\Program Files\TurboVNC\vncserver.exe"
+          # Doğrudan tam yolu tırnak içinde çağırarak dosya bulunamadı hatasını engelliyoruz
+          $vncScript = "C:\Program Files\TurboVNC\vncserver.bat"
+          if (!(Test-Path $vncScript)) {
+              $vncScript = "C:\Program Files\TurboVNC\vncserver.exe"
           }
-          Start-Process -FilePath "`"$vncPath`"" -ArgumentList "-geometry 1280x720 -depth 24" -NoNewWindow
+          
+          Write-Host "Baslatiliyor: $vncScript"
+          Start-Process -FilePath $vncScript -ArgumentList "-geometry 1280x720 -depth 24" -NoNewWindow
+          Write-Host "TurboVNC sunucusu baslatildi!"
+
+      - name: Oturumu Açık Tutma
+        run: |
+          while ($true) {
+              Start-Sleep -Seconds 30
+          }
           Write-Host "TurboVNC sunucusu baslatildi!"
 
       - name: Oturumu Açık Tutma
