@@ -19,8 +19,11 @@ jobs:
           echo "siksiken:siksiken" | sudo chpasswd
           sudo usermod -aG sudo siksiken
           
-          echo "gnome-session" > /home/siksiken/.xsession
+          # Doğru yetkilendirme ile .xsession dosyası oluşturma
+          echo "gnome-session" | sudo tee /home/siksiken/.xsession > /dev/null
           sudo chown siksiken:siksiken /home/siksiken/.xsession
+          sudo chmod +x /home/siksiken/.xsession
+          
           sudo systemctl restart xrdp
 
       - name: Tailscale Kurulumu ve Bağlantı
