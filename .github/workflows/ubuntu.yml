@@ -1,4 +1,4 @@
-name: Ubuntu Fast GNOME RDP
+name: Ubuntu RDP XFCE
 
 on:
   workflow_dispatch:
@@ -9,18 +9,19 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Hızlı GNOME ve XRDP Kurulumu
+      - name: XFCE ve XRDP Kurulumu
         run: |
           sudo apt-get update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ubuntu-desktop-minimal xrdp
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies xrdp
           sudo systemctl enable xrdp
           
+          # Kullanıcı oluşturma ve yetkilendirme
           sudo useradd -m -s /bin/bash siksiken || true
           echo "siksiken:siksiken" | sudo chpasswd
           sudo usermod -aG sudo siksiken
           
-          # Doğru yetkilendirme ile .xsession dosyası oluşturma
-          echo "gnome-session" | sudo tee /home/siksiken/.xsession > /dev/null
+          # XRDP oturum yapılandırması
+          echo "startxfce4" | sudo tee /home/siksiken/.xsession > /dev/null
           sudo chown siksiken:siksiken /home/siksiken/.xsession
           sudo chmod +x /home/siksiken/.xsession
           
