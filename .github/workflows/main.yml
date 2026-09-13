@@ -2,7 +2,7 @@ name: TurboVNC Windows
 on:
   push:
     branches: [ main ]
-  workflow_dispatch:  # Manuel çalıştırma için
+  workflow_dispatch:
 
 jobs:
   turbovnc:
@@ -23,14 +23,15 @@ jobs:
       - name: Kullanıcı Oluştur
         run: |
           $user = "siksiken"
-          $pass = ConvertTo-SecureString "siksiken" -AsPlainText -Force
-          New-LocalUser -Name $user -Password $pass -FullName "Eğlence Kullanıcısı" -AccountNeverExpires
+          # Windows şifre en az 8 karakter ve karmaşık olmalı
+          $pass = ConvertTo-SecureString "siksiken123!" -AsPlainText -Force
+          New-LocalUser -Name $user -Password $pass -FullName "Eğlence Kullanıcısı" -AccountNeverExpires -PasswordNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member $user
         shell: powershell
 
       - name: VNC Şifresini Ayarla
         run: |
-          $vncPass = "siksiken"
+          $vncPass = "siksiken123!"
           $vncPath = "C:\Program Files\TurboVNC\bin"
           Set-Content -Path "$env:TEMP\vncpw.txt" -Value $vncPass
           & "$vncPath\vncpasswd.exe" -f "$env:TEMP\vncpw.txt"
@@ -47,9 +48,9 @@ jobs:
         run: |
           Write-Host "================================"
           Write-Host "Kullanıcı adı: siksiken"
-          Write-Host "Şifre: siksiken"
+          Write-Host "Şifre: siksiken123!"
           Write-Host "VNC Port: 5901"
           Write-Host "================================"
-          while ($true) { Start-Sleep 60 }  # Kapanmaması için
+          while ($true) { Start-Sleep 60 }
         shell: powershell
         
