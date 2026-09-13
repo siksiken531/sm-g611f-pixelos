@@ -38,11 +38,8 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sh
           sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          # VNC sunucusunu başlatıp log çıktısını ekrana basıyoruz
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd -localhost no
-          
-          # Servis durumunu kontrol edelim
-          ps aux | grep vnc
+          # Doğru parametre: -nolocalhost
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd -nolocalhost
           
           tsIp=$(tailscale ip -4)
           echo "=================================================="
