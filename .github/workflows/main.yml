@@ -1,69 +1,55 @@
-name: TurboVNC-Telefon
-run-name: siksiken-VNC — ${{ github.run_id }}
+name: TurboVNC Windows
 on:
-  workflow_dispatch:
+  push:
+    branches: [ main ]
+  workflow_dispatch:  # Manuel çalıştırma için
 
 jobs:
-  vnc:
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
-
+  turbovnc:
+    runs-on: windows-latest
     steps:
-      - name: siksiken Kurulum
-        env:
-          TS_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
-        run: |
-          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
-          echo "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu jammy main" | sudo tee /etc/apt/sources.list.d/tailscale.list >/dev/null
-          sudo apt update && sudo apt install -y tailscale
-          sudo tailscale up --authkey="$TS_KEY" --hostname=siksiken
-          IP=$(tailscale ip -4)
-          echo "IP=$IP" >> $GITHUB_ENV
-        shell: bash
+      - name: Sistem Bilgisi
+        run: systeminfo
+        shell: powershell
 
-      - name: siksiken VNC
+      - name: TurboVNC İndir & Kur
         run: |
-          sudo apt update
-          sudo apt install -y turbovnc-standalone-server xfce4 xfce4-terminal
-          
-          mkdir -p ~/.vnc
-          echo -e "siksiken\nsiksiken\nn" | vncpasswd
-          
-          cat > ~/.vnc/xstartup << 'EOF'
-#!/bin/bash
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-exec startxfce4
-EOF
-          chmod +x ~/.vnc/xstartup
-        shell: bash
+          $installerUrl = "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe"
+          $installerPath = "$env:TEMP\TurboVNC-3.3.1-x64.exe"
+          Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+          Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+        shell: powershell
 
-      - name: siksiken Başlat
+      - name: Kullanıcı Oluştur
         run: |
-          turbovncserver -geometry 1024x600 -depth 24 :1
-          sleep 3
-        shell: bash
+          $user = "siksiken"
+          $pass = ConvertTo-SecureString "siksiken" -AsPlainText -Force
+          New-LocalUser -Name $user -Password $pass -FullName "Eğlence Kullanıcısı" -AccountNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member $user
+        shell: powershell
 
-      - name: siksiken
+      - name: VNC Şifresini Ayarla
         run: |
-          echo "========================================"
-          echo "✅ siksiken"
-          echo "========================================"
-          echo "siksiken IP: ${{ env.IP }}"
-          echo "siksiken PORT: 5901"
-          echo "siksiken ŞİFRE: siksiken"
-          echo "siksiken: ${{ env.IP }}:5901"
-          echo ""
-          echo "siksiken"
-          echo "1. Tailscale ✅"
-          echo "2. VNC → ${{ env.IP }}:5901"
-          echo "3. siksiken"
-          echo "4. siksiken"
-          echo "========================================"
-          echo "siksiken"
-        shell: bash
+          $vncPass = "siksiken"
+          $vncPath = "C:\Program Files\TurboVNC\bin"
+          Set-Content -Path "$env:TEMP\vncpw.txt" -Value $vncPass
+          & "$vncPath\vncpasswd.exe" -f "$env:TEMP\vncpw.txt"
+        shell: powershell
 
-      - name: siksiken Bekle
-        run: sleep 21600
-        shell: bash
+      - name: TurboVNC Sunucuyu Başlat
+        run: |
+          $vncBin = "C:\Program Files\TurboVNC\bin"
+          Start-Process -FilePath "$vncBin\vncserver.exe" -ArgumentList "-geometry 1280x720 -depth 24"
+          Start-Sleep -Seconds 5
+        shell: powershell
+
+      - name: Bağlantı Bilgilerini Göster
+        run: |
+          Write-Host "================================"
+          Write-Host "Kullanıcı adı: siksiken"
+          Write-Host "Şifre: siksiken"
+          Write-Host "VNC Port: 5901"
+          Write-Host "================================"
+          while ($true) { Start-Sleep 60 }  # Kapanmaması için
+        shell: powershell
         
