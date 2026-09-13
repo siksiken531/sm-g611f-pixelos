@@ -9,11 +9,10 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Ekran Paylaşımını (VNC) Etkinleştir
+      - name: Ekran Paylaşımını (VNC) Şifresiz Etkinleştir
         run: |
           sudo launchctl load -w /System/Library/LaunchDaemons/com.apple.screensharing.plist
-          sudo defaults write /Library/Preferences/com.apple.AppleVNCServer VNCAuthentication -int 1
-          sudo defaults write /Library/Preferences/com.apple.AppleVNCServer Password -string "password123"
+          sudo defaults write /Library/Preferences/com.apple.AppleVNCServer VNCAuthentication -int 0
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -users admin -privs -all -restart -agent -menu
 
       - name: Tailscale CLI Kurulumu ve Bağlantı
