@@ -13,37 +13,40 @@ jobs:
           $url = "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe"
           $out = "$env:TEMP\vnc.exe"
           Invoke-WebRequest $url -OutFile $out
-          Start-Process $out /VERYSILENT -Wait
+          Start-Process $out /VERYSILENT /SUPPRESSMSGBOXES /NORESTART -Wait
         shell: powershell
 
       - name: Kullanıcı Oluştur
         run: |
           $user = "siksiken"
-          # Windows kabul edecek format: 8+ karakter + harf+rakam
-          $pass = ConvertTo-SecureString "siksiken123" -AsPlainText -Force
-          New-LocalUser -Name $user -Password $pass -FullName "Eğlence" -AccountNeverExpires -PasswordNeverExpires
-          Add-LocalGroupMember Administrators $user
+          # KURALA TAM UYUYOR: Büyük+küçük harf + rakam + özel karakter
+          $pass = ConvertTo-SecureString "Siksiken123!" -AsPlainText -Force
+          New-LocalUser -Name $user -Password $pass -FullName "Eglence" -AccountNeverExpires -PasswordNeverExpires
+          Add-LocalGroupMember -Group "Administrators" -Member $user
         shell: powershell
 
-      - name: VNC Şifresi
+      - name: VNC Şifresini Ayarla
         run: |
           $vncPath = "C:\Program Files\TurboVNC\bin"
-          "siksiken123" | & "$vncPath\vncpasswd.exe" -f
+          $passFile = "$env:TEMP\vncpw.txt"
+          Set-Content -Path $passFile -Value "Siksiken123!"
+          & "$vncPath\vncpasswd.exe" -f $passFile
         shell: powershell
 
-      - name: VNC Başlat
+      - name: TurboVNC Başlat
         run: |
-          Start-Process "C:\Program Files\TurboVNC\bin\vncserver.exe" -ArgumentList "-geometry 1280x720"
+          $vncBin = "C:\Program Files\TurboVNC\bin"
+          Start-Process -FilePath "$vncBin\vncserver.exe" -ArgumentList "-geometry 1280x720 -depth 24"
           Start-Sleep 5
         shell: powershell
 
       - name: Bilgiler
         run: |
-          Write-Host "========================"
-          Write-Host "Kullanıcı: siksiken"
-          Write-Host "Şifre:     siksiken123"
-          Write-Host "Port:      5901"
-          Write-Host "========================"
+          Write-Host "================================"
+          Write-Host "Kullanıcı adı: siksiken"
+          Write-Host "Şifre: Siksiken123!"
+          Write-Host "VNC Port: 5901"
+          Write-Host "================================"
           while ($true) { Start-Sleep 3600 }
         shell: powershell
         
