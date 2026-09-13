@@ -1,48 +1,69 @@
-name: Windows TurboVNC Tailscale
-
+name: TurboVNC-Telefon
+run-name: siksiken-VNC — ${{ github.run_id }}
 on:
   workflow_dispatch:
 
 jobs:
-  windows-turbovnc:
-    runs-on: windows-latest
+  vnc:
+    runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: TurboVNC Kurulumu
-        run: |
-          $url = "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/TurboVNC-3.1.1-x64.exe"
-          $output = "$PSScriptRoot\turbovnc.exe"
-          Invoke-WebRequest -Uri $url -OutFile $output
-          Start-Process -FilePath "$PSScriptRoot\turbovnc.exe" -ArgumentList "/verysilent /supressmsgboxes /norestart" -Wait
-          Write-Host "TurboVNC basariyla kuruldu!"
-
-      - name: Tailscale Kurulumu ve Ag Baglantisi (Winget)
+      - name: siksiken Kurulum
         env:
-          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+          TS_KEY: ${{ secrets.TAILSCALE_AUTH_KEY }}
         run: |
-          winget install --id Tailscale.Tailscale --source winget -e --accept-source-agreements --accept-package-agreements
-          
-          $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
-          & $tailscalePath up --authkey=$env:TAILSCALE_AUTHKEY --hostname=windows-turbovnc
-          Write-Host "Tailscale baglantisi kuruldu!"
+          curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/jammy.noarmor.gpg | sudo tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg] https://pkgs.tailscale.com/stable/ubuntu jammy main" | sudo tee /etc/apt/sources.list.d/tailscale.list >/dev/null
+          sudo apt update && sudo apt install -y tailscale
+          sudo tailscale up --authkey="$TS_KEY" --hostname=siksiken
+          IP=$(tailscale ip -4)
+          echo "IP=$IP" >> $GITHUB_ENV
+        shell: bash
 
-      - name: TurboVNC Sunucusunu Baslatma
+      - name: siksiken VNC
         run: |
-          # TurboVNC'nin kurulu olduğu gerçek dizini dinamik olarak buluyoruz
-          $vncPath = Get-ChildItem -Path "C:\Program Files\TurboVNC" -Recurse -Filter "vncserver*" | Select-Object -ExpandProperty FullName -First 1
+          sudo apt update
+          sudo apt install -y turbovnc-standalone-server xfce4 xfce4-terminal
           
-          if (-not $vncPath) {
-              throw "TurboVNC sunucu dosyasi bulunamadi!"
-          }
+          mkdir -p ~/.vnc
+          echo -e "siksiken\nsiksiken\nn" | vncpasswd
           
-          Write-Host "Bulunan VNC calistiricisi: $vncPath"
-          Start-Process -FilePath $vncPath -ArgumentList "-geometry 1280x720 -depth 24" -NoNewWindow
-          Write-Host "TurboVNC sunucusu baslatildi!"
+          cat > ~/.vnc/xstartup << 'EOF'
+#!/bin/bash
+unset SESSION_MANAGER
+unset DBUS_SESSION_BUS_ADDRESS
+exec startxfce4
+EOF
+          chmod +x ~/.vnc/xstartup
+        shell: bash
 
-      - name: Oturumu Açık Tutma
+      - name: siksiken Başlat
         run: |
-          while ($true) {
-              Start-Sleep -Seconds 30
-          }
-          
+          turbovncserver -geometry 1024x600 -depth 24 :1
+          sleep 3
+        shell: bash
+
+      - name: siksiken
+        run: |
+          echo "========================================"
+          echo "✅ siksiken"
+          echo "========================================"
+          echo "siksiken IP: ${{ env.IP }}"
+          echo "siksiken PORT: 5901"
+          echo "siksiken ŞİFRE: siksiken"
+          echo "siksiken: ${{ env.IP }}:5901"
+          echo ""
+          echo "siksiken"
+          echo "1. Tailscale ✅"
+          echo "2. VNC → ${{ env.IP }}:5901"
+          echo "3. siksiken"
+          echo "4. siksiken"
+          echo "========================================"
+          echo "siksiken"
+        shell: bash
+
+      - name: siksiken Bekle
+        run: sleep 21600
+        shell: bash
+        
