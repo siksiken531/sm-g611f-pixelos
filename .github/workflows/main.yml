@@ -1,4 +1,4 @@
-name: TurboVNC Compatible Viewer
+name: TurboVNC Stable Bore
 
 on:
   workflow_dispatch:
@@ -33,10 +33,10 @@ jobs:
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: TurboVNC Uyumluluk Modunda Başlatma ve Bore Tüneli
+      - name: TurboVNC ve Bore Tüneli Başlatma
         run: |
-          # VNC Viewer ile el sıkışma sorununu çözen parametreler eklenmiştir
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -rfbauth /home/siksiken/.vnc/passwd -nohttpd
+          # Hatalı -nohttpd parametresi kaldırıldı, standart güvenlik ve şifreleme ayarları yapıldı
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -rfbauth /home/siksiken/.vnc/passwd
           
           curl -L https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz -o bore.tar.gz
           tar -xvf bore.tar.gz
@@ -44,7 +44,7 @@ jobs:
           sudo mv bore /usr/local/bin/
           
           echo "=================================================="
-          echo "TURBOVNC BORE TCP TÜNELİ BAŞLATILIYOR..."
+          echo "BORE TCP TÜNELİ BAŞLATILIYOR..."
           echo "=================================================="
           
           bore local 5901 --to bore.pub &
