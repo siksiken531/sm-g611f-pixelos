@@ -29,21 +29,15 @@ jobs:
 
       - name: TurboVNC Sunucusunu Baslatma
         run: |
-          # Doğrudan tam yolu tırnak içinde çağırarak dosya bulunamadı hatasını engelliyoruz
-          $vncScript = "C:\Program Files\TurboVNC\vncserver.bat"
-          if (!(Test-Path $vncScript)) {
-              $vncScript = "C:\Program Files\TurboVNC\vncserver.exe"
+          # TurboVNC'nin kurulu olduğu gerçek dizini dinamik olarak buluyoruz
+          $vncPath = Get-ChildItem -Path "C:\Program Files\TurboVNC" -Recurse -Filter "vncserver*" | Select-Object -ExpandProperty FullName -First 1
+          
+          if (-not $vncPath) {
+              throw "TurboVNC sunucu dosyasi bulunamadi!"
           }
           
-          Write-Host "Baslatiliyor: $vncScript"
-          Start-Process -FilePath $vncScript -ArgumentList "-geometry 1280x720 -depth 24" -NoNewWindow
-          Write-Host "TurboVNC sunucusu baslatildi!"
-
-      - name: Oturumu Açık Tutma
-        run: |
-          while ($true) {
-              Start-Sleep -Seconds 30
-          }
+          Write-Host "Bulunan VNC calistiricisi: $vncPath"
+          Start-Process -FilePath $vncPath -ArgumentList "-geometry 1280x720 -depth 24" -NoNewWindow
           Write-Host "TurboVNC sunucusu baslatildi!"
 
       - name: Oturumu Açık Tutma
