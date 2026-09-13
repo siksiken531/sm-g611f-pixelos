@@ -8,9 +8,13 @@ jobs:
   turbovnc:
     runs-on: windows-latest
     steps:
-      - name: Sistem Bilgisi
-        run: systeminfo
+      - name: Şifre Politikasını Geçici Kaldır
+        run: |
+          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters" /v "MinimumPasswordLength" /t REG_DWORD /d 3 /f
+          reg add "HKLM\SYSTEM\CurrentControlSet\Services\Netlogon\Parameters" /v "PasswordComplexity" /t REG_DWORD /d 0 /f
+          gpupdate /force
         shell: powershell
+        run-as-admin: true
 
       - name: TurboVNC İndir & Kur
         run: |
@@ -20,18 +24,17 @@ jobs:
           Start-Process -FilePath $installerPath -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
         shell: powershell
 
-      - name: Kullanıcı Oluştur
+      - name: Kullanıcı Oluştur (Kendi istediğin şifreyle!)
         run: |
           $user = "siksiken"
-          # Windows şifre en az 8 karakter ve karmaşık olmalı
-          $pass = ConvertTo-SecureString "siksiken123!" -AsPlainText -Force
+          $pass = ConvertTo-SecureString "siksiken" -AsPlainText -Force
           New-LocalUser -Name $user -Password $pass -FullName "Eğlence Kullanıcısı" -AccountNeverExpires -PasswordNeverExpires
           Add-LocalGroupMember -Group "Administrators" -Member $user
         shell: powershell
 
       - name: VNC Şifresini Ayarla
         run: |
-          $vncPass = "siksiken123!"
+          $vncPass = "siksiken"
           $vncPath = "C:\Program Files\TurboVNC\bin"
           Set-Content -Path "$env:TEMP\vncpw.txt" -Value $vncPass
           & "$vncPath\vncpasswd.exe" -f "$env:TEMP\vncpw.txt"
@@ -48,7 +51,7 @@ jobs:
         run: |
           Write-Host "================================"
           Write-Host "Kullanıcı adı: siksiken"
-          Write-Host "Şifre: siksiken123!"
+          Write-Host "Şifre: siksiken"
           Write-Host "VNC Port: 5901"
           Write-Host "================================"
           while ($true) { Start-Sleep 60 }
