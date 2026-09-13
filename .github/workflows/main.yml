@@ -1,35 +1,48 @@
-name: RDP Windows Simple
+name: Windows RDP via Tailscale Winget
 
 on:
   workflow_dispatch:
 
 jobs:
-  run-windows:
+  rdp-session:
     runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Kullanıcı Şifresini Ayarla ve RDP'yi Etkinleştir
-        shell: pwsh
+      - name: Tailscale'i Winget ile Kur
+        shell: powershell
         run: |
-          net user runneradmin Password123!
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          winget install --id Tailscale.Tailscale --silent --accept-package-agreements --accept-source-agreements
 
-      - name: Tailscale Kurulumu ve Bağlantı
-        shell: pwsh
+      - name: Tailscale Giriş Bağlantısını Üret ve Bağlan
+        shell: powershell
         run: |
-          winget install --id Tailscale.Tailscale -e --accept-source-agreements --accept-package-agreements
-          Start-Sleep -Seconds 10
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
-
-      - name: Oturumu Açık Tutma
-        shell: pwsh
-        run: |
-          Write-Host "Runner aktif."
-          while ($true) {
-              & "C:\Program Files\Tailscale\tailscale.exe" status | Out-Null
-              Start-Sleep -Seconds 20
-          }
+          & "C:\Program Files\Tailscale\tailscale.exe" up
           
+      - name: Kullanıcı Adı ve Şifreyi Ayarla
+        shell: powershell
+        run: |
+          net user siksiken siksiken /add
+          net localgroup administrators siksiken /add
+          net user runneradmin siksiken
+
+      - name: RDP Servisini Etkinleştir
+        shell: powershell
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          
+      - name: Tailscale IP Adresini Yazdır ve Oturumu Açık Tut
+        shell: powershell
+        run: |
+          $tailscaleIp = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          Write-Host "==========================================" -ForegroundColor Green
+          Write-Host "Tailscale IP Adresin : $tailscaleIp" -ForegroundColor Yellow
+          Write-Host "Kullanıcı Adı        : siksiken" -ForegroundColor Cyan
+          Write-Host "Şifre                : siksiken" -ForegroundColor Cyan
+          Write-Host "==========================================" -ForegroundColor Green
+          
+          $timeout = [System.Diagnostics.Stopwatch]::StartNew()
+          while ($timeout.Elapsed.TotalHours -lt 5.8) {
+              Start-Sleep -Seconds 60
+          }
