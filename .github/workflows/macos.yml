@@ -16,16 +16,18 @@ jobs:
           sudo defaults write /Library/Preferences/com.apple.AppleVNCServer Password -string "password123"
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -users admin -privs -all -restart -agent -menu
 
-      - name: Tailscale Kurulumu ve Bağlantı
+      - name: Tailscale CLI Kurulumu ve Bağlantı
         run: |
-          brew install --cask tailscale
-          sudo /Applications/Tailscale.app/Contents/MacOS/Tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
+          brew install tailscale
+          sudo tailscaled &
+          sleep 3
+          sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
 
       - name: Oturumu Açık Tutma
         run: |
           echo "macOS runner aktif."
           while true; do
-              /Applications/Tailscale.app/Contents/MacOS/Tailscale status > /dev/null
+              tailscale status > /dev/null
               sleep 20
           done
           
