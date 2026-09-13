@@ -38,12 +38,11 @@ jobs:
           curl -fsSL https://tailscale.com/install.sh | sh
           sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
-          # TurboVNC için uyumlu güvenlik parametresi ve şifre dosyası yolu
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :0 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
           
           tsIp=$(tailscale ip -4)
           echo "=================================================="
-          echo "TAILSCALE IP VE VNC PORTU: $tsIp:5901"
+          echo "TAILSCALE IP VE VNC PORTU: $tsIp:5900"
           echo "=================================================="
 
       - name: Oturumu Açık Tutma
