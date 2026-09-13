@@ -1,1 +1,83 @@
+name: Windows TurboVNC + Tailscale + AVNC
+on:
+  workflow_dispatch:
 
+jobs:
+  windows-vnc:
+    runs-on: windows-latest
+    timeout-minutes: 360  # ⏱️ 6 saat = 360 dakika
+
+    steps:
+      - name: TurboVNC Kur
+        run: |
+          winget install --id VirtualGL.TurboVNC -e --accept-source-agreements --accept-package-agreements
+        shell: powershell
+
+      - name: Tailscale Kur ve Bağla
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+        run: |
+          # Tailscale yükle
+          choco install tailscale -y --no-progress
+          
+          # Tailscale'i başlat ve ağa katıl
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="$env:TAILSCALE_AUTHKEY" --hostname=gh-windows-vnc-$env:GITHUB_RUN_ID --advertise-exit-node=false
+          
+          # IP adresini al
+          Start-Sleep -Seconds 5
+          $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+        shell: powershell
+
+      - name: TurboVNC Sunucuyu Başlat
+        env:
+          VNC_PASS: sifre123  # 🔑 Kendi şifreni yap!
+        run: |
+          $vncDir = "C:\Program Files\TurboVNC"
+          if (-not (Test-Path $vncDir)) {
+            $vncDir = "C:\Program Files\VirtualGL\TurboVNC"
+          }
+          Set-Location $vncDir
+
+          # Şifre dosyası oluştur
+          $passDir = "$env:USERPROFILE\.vnc"
+          $passFile = "$passDir\passwd"
+          New-Item -ItemType Directory -Path $passDir -Force | Out-Null
+          
+          # Şifreyi ayarla
+          $secpass = ConvertTo-SecureString $env:VNC_PASS -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential ("dummy", $secpass)
+          $cred.Password | ConvertFrom-SecureString | Out-File "$passDir\passwd.tmp"
+          
+          echo "$env:VNC_PASS`n$env:VNC_PASS`n" | .\vncpasswd.exe $passFile
+
+          # VNC'yi başlat — Tailscale üzerinden erişim açık
+          .\vncserver.exe :0 -geometry 1280x720 -rfbport 5900 -rfbauth $passFile -interface 0.0.0.0
+          
+          Start-Sleep -Seconds 3
+          echo "VNC Port 5900 hazır"
+        shell: powershell
+
+      - name: 📱 Bağlantı Bilgileri
+        run: |
+          echo ""
+          echo "=========================================="
+          echo "✅ TAMAM — AVNC İLE BAĞLAN"
+          echo "Tailscale IP: $env:TAILSCALE_IP"
+          echo "Port: 5900"
+          echo "Şifre: sifre123 (değiştirdiysen onu kullan)"
+          echo "Süre: 6 saat aktif kalacak"
+          echo "=========================================="
+          echo ""
+          echo "📌 AVNC'de yeni bağlantı ekle:"
+          echo "Sunucu: $env:TAILSCALE_IP"
+          echo "Port: 5900"
+          echo "Şifre: sifre123"
+        shell: powershell
+
+      - name: ⏳ 6 Saat Beklet
+        run: |
+          echo "VNC açık, 6 saat boyunca bekliyor..."
+          Start-Sleep -Seconds 21600  # 6 saat = 21600 saniye
+        shell: powershell
+        
