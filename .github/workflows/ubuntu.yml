@@ -1,0 +1,48 @@
+name: Ubuntu GNOME RDP
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-ubuntu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Ubuntu GNOME Masaüstü ve XRDP Kurulumu
+        run: |
+          sudo apt-get update
+          # Ubuntu'nun kendi orijinal masaüstü paketini kuruyoruz
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ubuntu-desktop xrdp
+          sudo systemctl enable xrdp
+          
+          # Kullanıcı adı ve şifreyi 'siksiken' olarak ayarlıyoruz
+          sudo useradd -m -s /bin/bash siksiken || true
+          echo "siksiken:siksiken" | sudo chpasswd
+          sudo usermod -aG sudo siksiken
+          
+          # GNOME oturumunu XRDP için aktif etme
+          echo "gnome-session" > /home/siksiken/.xsession
+          sudo chown siksiken:siksiken /home/siksiken/.xsession
+          
+          # XRDP servis yeniden başlatma
+          sudo systemctl restart xrdp
+
+      - name: Tailscale Kurulumu ve Bağlantı
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+          sudo tailscale up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
+          
+          tsIp=$(tailscale ip -4)
+          echo "=================================================="
+          echo "TAILSCALE IP ADRESİNİZ (RDP için): $tsIp"
+          echo "=================================================="
+
+      - name: Oturumu Açık Tutma
+        run: |
+          echo "Ubuntu RDP runner aktif."
+          while true; do
+              tailscale status > /dev/null
+              sleep 20
+          done
+          
