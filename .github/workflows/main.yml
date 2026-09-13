@@ -11,13 +11,11 @@ jobs:
     steps:
       - name: Şifre Politikasını Devre Dışı Bırak ve Kullanıcı Oluştur
         run: |
-          # Windows şifre karmaşıklığı gereksinimini kapatıyoruz
           secedit /export /cfg C:\secpol.cfg
           (Get-Content C:\secpol.cfg).replace("PasswordComplexity = 1", "PasswordComplexity = 0") | Set-Content C:\secpol.cfg
           secedit /configure /db C:\windows\security\database\secpol.sdb /cfg C:\secpol.cfg /areas SECURITYPOLICY
           gpupdate /force
 
-          # Kullanıcı adı ve istediğin şifreyi tanımlıyoruz
           net user siksiken siksiken /add
           net localgroup administrators siksiken /add
           net accounts /maxpwage:unlimited
@@ -28,9 +26,14 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-      - name: Tailscale Kurulumu ve Bağlantı
+      - name: Winget ile Tailscale Kurulumu ve Bağlantı
         run: |
-          winget install Tailscale.Tailscale
+          # Winget onay ekranlarına takılmadan direkt kurar
+          winget install --id Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
+          
+          # Komut satırı yolunun güncellenmesi için kısa bir bekleme
+          Start-Sleep -Seconds 10
+          
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TAILSCALE_AUTHKEY }}" --accept-routes
           
           $tsIp = (& "C:\Program Files\Tailscale\tailscale.exe" ip -4)
