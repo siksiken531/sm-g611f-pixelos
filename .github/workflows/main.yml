@@ -1,4 +1,4 @@
-name: TurboVNC Bore Tunnel
+name: TurboVNC Bore Pub
 
 on:
   workflow_dispatch:
@@ -12,7 +12,7 @@ jobs:
       - name: TurboVNC ve XFCE Kurulumu
         run: |
           sudo apt-get update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies curl wget xauth libglu1-mesa
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies wget curl xauth libglu1-mesa
           
           wget "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb" -O turbovnc.deb
           sudo apt-get install -y ./turbovnc.deb
@@ -33,46 +33,25 @@ jobs:
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: TurboVNC Başlatma ve Bore TCP Tüneli
+      - name: TurboVNC ve Bore Pub Başlatma
         run: |
+          # VNC sunucusunu başlatıyoruz
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd
           
-          # Saf TCP tüneli için 'bore' aracını indiriyoruz
+          # Bore aracını indirip kuruyoruz
           curl -L https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz -o bore.tar.gz
           tar -xvf bore.tar.gz
           chmod +x bore
           sudo mv bore /usr/local/bin/
           
           echo "=================================================="
-          echo "BORE TCP TÜNELİ BAŞLATILIYOR (VNC Port: 5901)"
+          echo "BORE.PUB TCP TÜNELİ BAŞLATILIYOR..."
           echo "=================================================="
           
-          # Bore ile portu kamuya açık bir TCP portuna yönlendiriyoruz
+          # Doğrudan bore.pub üzerinden portu dışarıya açıyoruz
           bore local 5901 --to bore.pub &
-          sleep 5
-
-      - name: Oturumu Açık Tutma
-        run: |
-          while true; do
-              sleep 30
-          done
-        run: |
-          # TurboVNC sunucusunu dış bağlantılara tamamen açık şekilde başlatıyoruz
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -securitytypes VNC -rfbauth /home/siksiken/.vnc/passwd -interface 0.0.0.0
           
-          # Cloudflare tünel aracını indiriyoruz
-          curl -L --output cloudflared https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
-          chmod +x cloudflared
-          sudo mv cloudflared /usr/local/bin/
-          
-          echo "=================================================="
-          echo "TURBOVNC İÇİN CLOUDFLARE TCP TÜNELİ BAŞLATILIYOR..."
-          echo "=================================================="
-          
-          # Doğrudan VNC portunu (5901) TCP üzerinden tünelliyoruz
-          cloudflared tunnel --url tcp://localhost:5901 &
-          
-          sleep 12
+          sleep 8
 
       - name: Oturumu Açık Tutma
         run: |
