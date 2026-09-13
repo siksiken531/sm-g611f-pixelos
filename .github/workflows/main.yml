@@ -1,60 +1,42 @@
-name: TurboVNC Stable Auth Bore
+name: Windows TurboVNC Tailscale
 
 on:
   workflow_dispatch:
 
 jobs:
-  run-turbovnc:
-    runs-on: ubuntu-latest
+  windows-turbovnc:
+    runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: TurboVNC ve XFCE Kurulumu
+      - name: TurboVNC Kurulumu
         run: |
-          sudo apt-get update -y
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xfce4 xfce4-goodies wget curl xauth libglu1-mesa net-tools
-          
-          wget "https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb" -O turbovnc.deb
-          sudo apt-get install -y ./turbovnc.deb
-          rm turbovnc.deb
-          
-          sudo useradd -m -s /bin/bash siksiken || true
-          echo "siksiken:siksiken" | sudo chpasswd
-          sudo usermod -aG sudo siksiken
-          
-          sudo mkdir -p /home/siksiken/.vnc
-          echo "siksiken" | /opt/TurboVNC/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
-          sudo chmod 600 /home/siksiken/.vnc/passwd
-          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
-          
-          echo "#!/bin/bash" | sudo tee /home/siksiken/.vnc/xstartup > /dev/null
-          echo "xrdb $HOME/.Xresources" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
-          echo "startxfce4 &" | sudo tee -a /home/siksiken/.vnc/xstartup > /dev/null
-          sudo chmod +x /home/siksiken/.vnc/xstartup
-          sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
+          Invoke-WebRequest -Uri "https://sourceforge.net/projects/turbovnc/files/3.1.1/TurboVNC-3.1.1-x64.exe/download" -OutFile turbovnc.exe
+          Start-Process -FilePath "turbovnc.exe" -ArgumentList "/verysilent /supressmsgboxes /norestart" -Wait
+          Write-Host "TurboVNC basariyla kuruldu!"
 
-      - name: TurboVNC Başlatma ve Bore Tüneli
+      - name: Tailscale Kurulumu ve Ag Baglantisi
+        env:
+          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
         run: |
-          # Doğru şifre dosyası parametresiyle sunucuyu kararlı şekilde başlatıyoruz
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -rfbauth /home/siksiken/.vnc/passwd
-          
-          echo "Aktif dinlenen portlar:"
-          sudo netstat -tuln | grep 590
-          
-          curl -L https://github.com/ekzhang/bore/releases/download/v0.5.1/bore-v0.5.1-x86_64-unknown-linux-musl.tar.gz -o bore.tar.gz
-          tar -xvf bore.tar.gz
-          chmod +x bore
-          sudo mv bore /usr/local/bin/
-          
-          echo "=================================================="
-          echo "BORE TCP TÜNELİ BAŞLATILIYOR..."
-          echo "=================================================="
-          
-          bore local 5901 --to bore.pub &
-          sleep 6
+          Invoke-WebRequest -Uri https://pkgs.tailscale.com/stable/tailscale-setup-amd64.msi -OutFile tailscale-setup.msi
+          Start-Process msiexec.exe -Wait -ArgumentList '/i tailscale-setup.msi /quiet /norestart'
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=$env:TAILSCALE_AUTHKEY --hostname=windows-turbovnc
+          Write-Host "Tailscale baglantisi kuruldu!"
 
-      - name: Oturumu Açık Tutma
+      - name: TurboVNC Sunucusunu Baslatma
         run: |
-          while true; do
-              sleep 30
-          done
+          $vncPath = "C:\Program Files\TurboVNC\vncserver.bat"
+          if (!(Test-Path $vncPath)) {
+              $vncPath = "C:\Program Files\TurboVNC\vncserver.exe"
+          }
+          # Windows uzerinde TurboVNC sunucusunu baslatiyoruz
+          Start-Process -FilePath $vncPath -ArgumentList "-geometry 1280x720 -depth 24"
+          Write-Host "TurboVNC sunucusu baslatildi!"
+
+      - name: Oturumu Acik Tutma
+        run: |
+          while ($true) {
+              Start-Sleep -Seconds 30
+          }
+          
