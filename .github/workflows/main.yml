@@ -1,4 +1,4 @@
-name: TurboVNC-SIFIR
+name: TurboVNC-DBus-Fix
 on:
   workflow_dispatch:
 
@@ -7,42 +7,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: 🧹 TÜMÜNÜ SİL
+      - name: 🧹 Tam Temizlik
         run: |
-          sudo apt remove -y --purge xfce4* xubuntu-* ubuntu-desktop* turbovnc* 2>/dev/null || true
+          sudo apt remove -y --purge xfce4* xubuntu-* ubuntu-desktop* turbovnc* dbus* 2>/dev/null || true
           sudo apt autoremove -y
-          sudo apt clean
-          sudo rm -rf /home/siksiken /opt/TurboVNC /tmp/.X* /tmp/t.deb
+          sudo rm -rf /home/siksiken /opt/TurboVNC /tmp/.X*
           pkill -f Xvnc || true
-          pkill -f vnc || true
+          pkill -f dbus || true
 
       - name: Tailscale
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTH_KEY }}
 
-      - name: ✅ SIFIRDAN Kurulum
+      - name: ✅ DBus + XFCE Tam Kurulum
         run: |
           sudo apt update
           sudo apt upgrade -y
           
-          # Sadece XFCE — temiz ve tam
-          sudo apt install -y xfce4 xfce4-goodies
+          # DBus paketleri — eksik kalmasın!
+          sudo apt install -y --reinstall dbus dbus-x11 libdbus-1-3
           
-          # Gerekli sistem paketleri
-          sudo apt install -y xorg dbus-x11 x11-xserver-utils wget xauth
+          # XFCE — tam paketler
+          sudo apt install -y xfce4 xfce4-goodies xfce4-session
+          
+          # Gerekli sistem
+          sudo apt install -y xorg x11-xserver-utils wget xauth
 
-      - name: ✅ SIFIRDAN TurboVNC
+      - name: ✅ TurboVNC
         run: |
           wget https://github.com/TurboVNC/turbovnc/releases/download/3.2/turbovnc_3.2_amd64.deb -O /tmp/t.deb
           sudo apt install -y /tmp/t.deb
 
-      - name: ✅ SIFIRDAN Kullanıcı
+      - name: ✅ Kullanıcı
         run: |
           sudo useradd -m siksiken || true
           echo "siksiken:siksiken" | sudo chpasswd
 
-      - name: ✅ SIFIRDAN VNC Ayarları
+      - name: ✅ DBus Uyumlu Ayarlar
         run: |
           sudo -u siksiken mkdir -p /home/siksiken/.vnc
           
@@ -53,27 +55,31 @@ jobs:
           sudo chmod 700 /home/siksiken/.vnc
           sudo chmod 600 /home/siksiken/.vnc/passwd
           
+          # ✅ DBus HATASINI ÖNLEYEN xstartup
           echo '#!/bin/bash' > /tmp/start
           echo 'unset SESSION_MANAGER' >> /tmp/start
           echo 'unset DBUS_SESSION_BUS_ADDRESS' >> /tmp/start
-          echo 'exec /usr/bin/startxfce4' >> /tmp/start
+          echo 'export XDG_RUNTIME_DIR=/tmp/xdg-runtime-siksiken' >> /tmp/start
+          echo 'mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR' >> /tmp/start
+          echo 'exec /usr/bin/xfce4-session' >> /tmp/start
           
           sudo mv /tmp/start /home/siksiken/.vnc/xstartup
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: ✅ TEMİZ BAŞLAT
+      - name: ✅ Hatasız Başlat
         run: |
           sudo -u siksiken /opt/TurboVNC/bin/vncserver -kill :* 2>/dev/null || true
           pkill -f Xvnc 2>/dev/null || true
           rm -rf /tmp/.X*-lock /tmp/.X11-unix/* /home/siksiken/.Xauthority
+          rm -rf /tmp/xdg-runtime-siksiken
           
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -interface 0.0.0.0
           
           sleep 5
           
           echo "========================================"
-          echo "✅ SIFIRDAN HAZIR!"
+          echo "✅ DBUS SORUNU BİTTİ!"
           echo "IP: $(tailscale ip -4):5901"
           echo "ŞİFRE: siksiken"
           echo "========================================"
