@@ -9,10 +9,18 @@ jobs:
     timeout-minutes: 360
 
     steps:
+      - name: Tailscale winget ile kur
+        shell: pwsh
+        run: |
+          winget install --id Tailscale.Tailscale -e --silent --accept-package-agreements --accept-source-agreements
+          Start-Sleep -Seconds 10
+
       - name: Tailscale bağlan
-        uses: tailscale/github-action@v2
-        with:
-          authkey: ${{ secrets.TS_AUTHKEY }}
+        shell: pwsh
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TS_AUTHKEY }} --hostname=gh-vnc --accept-routes
+          Start-Sleep -Seconds 5
+          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
       - name: TurboVNC winget ile kur
         shell: pwsh
