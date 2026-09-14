@@ -1,11 +1,12 @@
-name: TurboVNC-Eglence
+name: TurboVNC-6Saat
 on:
   workflow_dispatch:
 
 jobs:
   vnc:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 360  # 6 saat
+
     steps:
       - name: Tailscale Bağlan
         uses: tailscale/github-action@v4
@@ -16,35 +17,44 @@ jobs:
         run: |
           sudo apt update
           sudo apt install -y xfce4 xfce4-terminal xauth wget
-
-      - name: TurboVNC Kur
-        run: |
           wget https://github.com/TurboVNC/turbovnc/releases/download/3.2/turbovnc_3.2_amd64.deb -O /tmp/t.deb
           sudo apt install -y /tmp/t.deb
 
-      - name: Kullanıcı Ayarla
+      - name: VNC Ayarları (Hatasız)
         run: |
+          # Kullanıcı oluştur
           sudo useradd -m siksiken || true
           echo "siksiken:siksiken" | sudo chpasswd
           
-          su - siksiken -c 'mkdir -p ~/.vnc && echo -n "siksiken" | /opt/TurboVNC/bin/vncpasswd -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd'
+          # Gerekli klasörü oluştur
+          sudo mkdir -p /home/siksiken/.vnc
           
-          echo -e '#!/bin/bash\nexec startxfce4' > /tmp/xstartup
-          chmod +x /tmp/xstartup
-          su - siksiken -c 'cp /tmp/xstartup ~/.vnc/xstartup'
+          # VNC şifresini yaz (doğrudan dosyaya)
+          echo -n "siksiken" | sudo /opt/TurboVNC/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
+          
+          # İzinleri düzelt
+          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
+          sudo chmod 700 /home/siksiken/.vnc
+          sudo chmod 600 /home/siksiken/.vnc/passwd
+          
+          # Xfce başlatma dosyası
+          echo -e '#!/bin/bash\nexec startxfce4' | sudo tee /home/siksiken/.vnc/xstartup > /dev/null
+          sudo chmod +x /home/siksiken/.vnc/xstartup
+          sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
       - name: VNC'yi Başlat
         run: |
-          su - siksiken -c '/opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24'
-          sleep 2
+          # Kullanıcı olarak VNC'yi başlat
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24
+          sleep 3
           
           echo "========================================"
-          echo "✅ BAĞLANTI HAZIR!"
-          echo "Tailscale IP: $(tailscale ip -4)"
-          echo "Bağlantı: $(tailscale ip -4):5901"
-          echo "Şifre: siksiken"
+          echo "✅ BAŞARILI!"
+          echo "IP: $(tailscale ip -4):5901"
+          echo "ŞİFRE: siksiken"
+          echo "SÜRE: 6 saat aktif kalacak"
           echo "========================================"
           
-          su - siksiken -c '/opt/TurboVNC/bin/vncserver -list'
-          sleep 3600
+          # 6 saat bekle = 21600 saniye
+          sleep 21600
           
