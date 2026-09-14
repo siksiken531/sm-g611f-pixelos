@@ -1,87 +1,46 @@
-name: TurboVNC-DBus-Fix
+name: Windows TurboVNC
+
 on:
   workflow_dispatch:
 
 jobs:
   vnc:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 360
+
     steps:
-      - name: 🧹 Tam Temizlik
-        run: |
-          sudo apt remove -y --purge xfce4* xubuntu-* ubuntu-desktop* turbovnc* dbus* 2>/dev/null || true
-          sudo apt autoremove -y
-          sudo rm -rf /home/siksiken /opt/TurboVNC /tmp/.X*
-          pkill -f Xvnc || true
-          pkill -f dbus || true
-
-      - name: Tailscale
-        uses: tailscale/github-action@v4
+      - name: Tailscale bağlan
+        uses: tailscale/github-action@v2
         with:
-          authkey: ${{ secrets.TS_AUTH_KEY }}
+          authkey: ${{ secrets.TS_AUTHKEY }}
 
-      - name: ✅ DBus + XFCE Tam Kurulum
+      - name: TurboVNC winget ile kur
+        shell: pwsh
         run: |
-          sudo apt update
-          sudo apt upgrade -y
-          
-          # DBus paketleri — eksik kalmasın!
-          sudo apt install -y --reinstall dbus dbus-x11 libdbus-1-3
-          
-          # XFCE — tam paketler
-          sudo apt install -y xfce4 xfce4-goodies xfce4-session
-          
-          # Gerekli sistem
-          sudo apt install -y xorg x11-xserver-utils wget xauth
+          winget install --id TurboVNC.TurboVNC -e --silent --accept-package-agreements --accept-source-agreements
+          if (-not (Test-Path "C:\Program Files\TurboVNC\bin\vncserver.exe")) {
+            Write-Host "winget olmadı, manuel indiriliyor..."
+            Invoke-WebRequest "https://sourceforge.net/projects/turbovnc/files/3.1.1/turbovnc-3.1.1-x64.exe/download" -OutFile "$env:TEMP\turbovnc.exe"
+            Start-Process "$env:TEMP\turbovnc.exe" -ArgumentList "/S" -Wait
+          }
 
-      - name: ✅ TurboVNC
+      - name: VNC şifresi ayarla
+        shell: pwsh
         run: |
-          wget https://github.com/TurboVNC/turbovnc/releases/download/3.2/turbovnc_3.2_amd64.deb -O /tmp/t.deb
-          sudo apt install -y /tmp/t.deb
+          New-Item -ItemType Directory -Force "$env:USERPROFILE\.vnc" | Out-Null
+          "siksiken" | & "C:\Program Files\TurboVNC\bin\vncpasswd.exe" -f | Out-File "$env:USERPROFILE\.vnc\passwd" -Encoding ascii
 
-      - name: ✅ Kullanıcı
+      - name: TurboVNC başlat
+        shell: pwsh
         run: |
-          sudo useradd -m siksiken || true
-          echo "siksiken:siksiken" | sudo chpasswd
+          Start-Process "C:\Program Files\TurboVNC\bin\vncserver.exe" -ArgumentList "-geometry 1920x1080 -depth 24 -localhost no :1"
+          Start-Sleep -Seconds 5
 
-      - name: ✅ DBus Uyumlu Ayarlar
+      - name: Tailscale IP yaz
+        shell: pwsh
         run: |
-          sudo -u siksiken mkdir -p /home/siksiken/.vnc
-          
-          echo -n "siksiken" | sudo -u siksiken /opt/TurboVNC/bin/vncpasswd -f > /tmp/pw
-          sudo mv /tmp/pw /home/siksiken/.vnc/passwd
-          
-          sudo chown -R siksiken:siksiken /home/siksiken/.vnc
-          sudo chmod 700 /home/siksiken/.vnc
-          sudo chmod 600 /home/siksiken/.vnc/passwd
-          
-          # ✅ XDG_CONFIG_DIRS ve DBus Tanımlı xstartup
-          echo '#!/bin/bash' > /tmp/start
-          echo 'export XDG_RUNTIME_DIR=/tmp/xdg-runtime-siksiken' >> /tmp/start
-          echo 'export XDG_CONFIG_DIRS=/etc/xdg' >> /tmp/start
-          echo 'mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR' >> /tmp/start
-          echo 'exec dbus-launch --exit-with-session /usr/bin/xfce4-session' >> /tmp/start
-          
-          sudo mv /tmp/start /home/siksiken/.vnc/xstartup
-          sudo chmod +x /home/siksiken/.vnc/xstartup
-          sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
+          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: ✅ Hatasız Başlat
-        run: |
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver -kill :* 2>/dev/null || true
-          pkill -f Xvnc 2>/dev/null || true
-          rm -rf /tmp/.X*-lock /tmp/.X11-unix/* /home/siksiken/.Xauthority
-          rm -rf /tmp/xdg-runtime-siksiken
-          
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24 -interface 0.0.0.0
-          
-          sleep 5
-          
-          echo "========================================"
-          echo "✅ DBUS SORUNU BİTTİ!"
-          echo "IP: $(tailscale ip -4):5901"
-          echo "ŞİFRE: siksiken"
-          echo "========================================"
-          
-          sleep 21600
-          
+      - name: Açık tut
+        shell: pwsh
+        run: while ($true) { Start-Sleep -Seconds 60 }
