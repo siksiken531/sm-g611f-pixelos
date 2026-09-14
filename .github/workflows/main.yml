@@ -1,108 +1,50 @@
-name: Windows TurboVNC + Tailscale + AVNC
+name: TurboVNC-Eglence
 on:
   workflow_dispatch:
 
 jobs:
-  windows-vnc:
-    runs-on: windows-latest
-    timeout-minutes: 360
-
+  vnc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
+      - name: Tailscale Bağlan
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TS_AUTH_KEY }}
+
+      - name: Sistemi Kur
+        run: |
+          sudo apt update
+          sudo apt install -y xfce4 xfce4-terminal xauth wget
+
       - name: TurboVNC Kur
         run: |
-          winget install --id VirtualGL.TurboVNC -e --accept-source-agreements --accept-package-agreements
-          Start-Sleep -Seconds 10
-        shell: powershell
+          wget https://github.com/TurboVNC/turbovnc/releases/download/3.2/turbovnc_3.2_amd64.deb -O /tmp/t.deb
+          sudo apt install -y /tmp/t.deb
 
-      - name: Tailscale Kur ve Hızlı Bağlan
-        env:
-          TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      - name: Kullanıcı Ayarla
         run: |
-          choco install tailscale -y --no-progress
+          sudo useradd -m siksiken || true
+          echo "siksiken:siksiken" | sudo chpasswd
           
-          # ✅ Arka planda çalıştır, beklemeyi engelle
-          $proc = Start-Process -FilePath "C:\Program Files\Tailscale\tailscale.exe" -ArgumentList "up --authkey=$env:TAILSCALE_AUTHKEY --hostname=gh-win-vnc-$env:GITHUB_RUN_ID --timeout=30s" -PassThru
+          su - siksiken -c 'mkdir -p ~/.vnc && echo -n "siksiken" | /opt/TurboVNC/bin/vncpasswd -f > ~/.vnc/passwd && chmod 600 ~/.vnc/passwd'
           
-          # 15 saniye bekle, devam et
-          Start-Sleep -Seconds 15
-          
-          # IP'yi al
-          $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-          if ($tsIP) {
-            echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-            Write-Host "✅ Tailscale baglanti: $tsIP"
-          } else {
-            Write-Warning "⚠️ Tailscale IP alinamadi, direkt IP dene"
-          }
-        shell: powershell
+          echo -e '#!/bin/bash\nexec startxfce4' > /tmp/xstartup
+          chmod +x /tmp/xstartup
+          su - siksiken -c 'cp /tmp/xstartup ~/.vnc/xstartup'
 
-      - name: TurboVNC Ayarla ve Başlat
-        env:
-          VNC_PASS: sifre123
+      - name: VNC'yi Başlat
         run: |
-          $vncPaths = @(
-            "C:\Program Files\TurboVNC\bin",
-            "C:\Program Files\VirtualGL\TurboVNC\bin",
-            "C:\Program Files\TurboVNC"
-          )
+          su - siksiken -c '/opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24'
+          sleep 2
           
-          $binDir = $null
-          foreach ($p in $vncPaths) {
-            if (Test-Path "$p\vncserver.exe") {
-              $binDir = $p
-              break
-            }
-          }
+          echo "========================================"
+          echo "✅ BAĞLANTI HAZIR!"
+          echo "Tailscale IP: $(tailscale ip -4)"
+          echo "Bağlantı: $(tailscale ip -4):5901"
+          echo "Şifre: siksiken"
+          echo "========================================"
           
-          if (-not $binDir) {
-            Write-Error "❌ TurboVNC bulunamadi"
-            exit 1
-          }
+          su - siksiken -c '/opt/TurboVNC/bin/vncserver -list'
+          sleep 3600
           
-          Write-Host "✅ Bulundu: $binDir"
-          
-          $passDir = Join-Path $env:USERPROFILE ".vnc"
-          $passFile = Join-Path $passDir "passwd"
-          
-          if (-not (Test-Path $passDir)) {
-            New-Item -ItemType Directory -Path $passDir -Force | Out-Null
-          }
-          
-          # Şifre oluştur
-          $secPass = ConvertTo-SecureString $env:VNC_PASS -AsPlainText -Force
-          $cred = New-Object System.Management.Automation.PSCredential ("dummy", $secPass)
-          $input = "$env:VNC_PASS`n$env:VNC_PASS`n"
-          $input | & "$binDir\vncpasswd.exe" $passFile
-          
-          # VNC'yi başlat
-          $vncExe = Join-Path $binDir "vncserver.exe"
-          & $vncExe :0 -geometry 1280x720 -rfbport 5900 -rfbauth $passFile -interface 0.0.0.0
-          
-          Start-Sleep -Seconds 3
-          Write-Host "✅ VNC hazir — Port 5900"
-          
-          # Gerekirse doğrudan IP'yi de yaz
-          $directIP = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and $_.PrefixOrigin -eq 'Dhcp' -or $_.PrefixOrigin -eq 'Manual' } | Select-Object -First 1).IPAddress
-          Write-Host "💡 Alternatif IP: $directIP"
-        shell: powershell
-
-      - name: Bağlantı Bilgileri
-        run: |
-          Write-Host ""
-          Write-Host "=================================="
-          Write-Host "✅ AVNC BAGLANTI BILGILERI"
-          if ($env:TAILSCALE_IP) {
-            Write-Host "Tailscale IP: $env:TAILSCALE_IP"
-          }
-          Write-Host "Port: 5900"
-          Write-Host "Sifre: sifre123"
-          Write-Host "Süre: 6 saat"
-          Write-Host "=================================="
-        shell: powershell
-
-      - name: 6 Saat Beklet
-        run: |
-          Write-Host "Açik, 6 saat bekliyor..."
-          Start-Sleep -Seconds 21600
-        shell: powershell
-        
