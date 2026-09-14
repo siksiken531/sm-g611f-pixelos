@@ -1,4 +1,4 @@
-name: TurboVNC-Sorunsuz
+name: TurboVNC-Temiz
 on:
   workflow_dispatch:
 
@@ -7,12 +7,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
-      - name: Tailscale Bağlan
+      - name: Tailscale
         uses: tailscale/github-action@v4
         with:
           authkey: ${{ secrets.TS_AUTH_KEY }}
 
-      - name: Tam Kurulum
+      - name: Kurulum
         run: |
           sudo apt update
           sudo apt upgrade -y
@@ -20,51 +20,37 @@ jobs:
           wget https://github.com/TurboVNC/turbovnc/releases/download/3.2/turbovnc_3.2_amd64.deb -O /tmp/t.deb
           sudo apt install -y /tmp/t.deb
 
-      - name: Kullanıcı Ayarla
+      - name: Kullanıcı
         run: |
           sudo useradd -m siksiken || true
           echo "siksiken:siksiken" | sudo chpasswd
 
-      - name: VNC Ayarları — Garantili
+      - name: VNC Ayarları
         run: |
-          HOME_DIR="/home/siksiken"
-          VNC_DIR="$HOME_DIR/.vnc"
+          sudo mkdir -p /home/siksiken/.vnc
           
-          sudo mkdir -p $VNC_DIR
+          echo -n "siksiken" | sudo /opt/TurboVNC/bin/vncpasswd -f > /tmp/passwd
+          sudo mv /tmp/passwd /home/siksiken/.vnc/passwd
+          sudo chown siksiken:siksiken /home/siksiken/.vnc/passwd
+          sudo chmod 600 /home/siksiken/.vnc/passwd
           
-          # Şifre
-          echo -n "siksiken" | sudo /opt/TurboVNC/bin/vncpasswd -f | sudo tee $VNC_DIR/passwd > /dev/null
-          sudo chown -R siksiken:siksiken $VNC_DIR
-          sudo chmod 700 $VNC_DIR
-          sudo chmod 600 $VNC_DIR/passwd
+          echo '#!/bin/bash' > /tmp/start
+          echo 'unset SESSION_MANAGER' >> /tmp/start
+          echo 'unset DBUS_SESSION_BUS_ADDRESS' >> /tmp/start
+          echo 'exec /usr/bin/startxfce4' >> /tmp/start
           
-          # ⭐ En önemli kısım: xstartup dosyası
-          cat > /tmp/xstartup << 'EOF'
-#!/bin/bash
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-exec /usr/bin/startxfce4
-EOF
-          sudo cp /tmp/xstartup $VNC_DIR/xstartup
-          sudo chmod +x $VNC_DIR/xstartup
-          sudo chown siksiken:siksiken $VNC_DIR/xstartup
+          sudo mv /tmp/start /home/siksiken/.vnc/xstartup
+          sudo chmod +x /home/siksiken/.vnc/xstartup
+          sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
 
-      - name: Eski VNC'leri Temizle & Yeni Başlat
+      - name: Başlat
         run: |
-          # Eski kilit dosyalarını sil
           sudo rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1
-          
-          # VNC'yi temiz başlat
           sudo -u siksiken /opt/TurboVNC/bin/vncserver -kill :1 || true
-          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24
+          sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720
           
           sleep 3
-          
-          echo "========================================"
-          echo "✅ HAZIR! BAĞLANABİLİRSİN!"
           echo "IP: $(tailscale ip -4):5901"
-          echo "ŞİFRE: siksiken"
-          echo "========================================"
-          
+          echo "Şifre: siksiken"
           sleep 21600
           
