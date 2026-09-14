@@ -55,9 +55,10 @@ jobs:
           sudo chmod 700 /home/siksiken/.vnc
           sudo chmod 600 /home/siksiken/.vnc/passwd
           
-          # ✅ DBus HATASINI ÖNLEYEN xstartup
+          # ✅ XDG_CONFIG_DIRS ve DBus Tanımlı xstartup
           echo '#!/bin/bash' > /tmp/start
           echo 'export XDG_RUNTIME_DIR=/tmp/xdg-runtime-siksiken' >> /tmp/start
+          echo 'export XDG_CONFIG_DIRS=/etc/xdg' >> /tmp/start
           echo 'mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR' >> /tmp/start
           echo 'exec dbus-launch --exit-with-session /usr/bin/xfce4-session' >> /tmp/start
           
@@ -83,3 +84,4 @@ jobs:
           echo "========================================"
           
           sleep 21600
+          
