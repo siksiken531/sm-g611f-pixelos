@@ -18,24 +18,28 @@ jobs:
       - name: Tailscale bağlan
         shell: pwsh
         run: |
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey=${{ secrets.TS_AUTHKEY }} --hostname=gh-vnc --accept-routes
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TS_AUTH_KEY }}" --hostname=gh-vnc --accept-routes
           Start-Sleep -Seconds 5
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
       - name: TurboVNC indir ve kur
         shell: pwsh
         run: |
-          Invoke-WebRequest "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe" -OutFile "$env:TEMP\turbovnc.exe"
-          Start-Process "$env:TEMP\turbovnc.exe" -ArgumentList "/S" -Wait
-          Start-Sleep -Seconds 5
+          $url = "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe"
+          Invoke-WebRequest $url -OutFile "$env:TEMP\turbovnc.exe"
+          Write-Host "Indirildi, kuruluyor..."
+          $p = Start-Process "$env:TEMP\turbovnc.exe" -ArgumentList "/S" -PassThru
+          $p | Wait-Process -Timeout 120 -ErrorAction SilentlyContinue
+          Write-Host "Kurulum tamam veya timeout."
+          Test-Path "C:\Program Files\TurboVNC\bin\vncserver.exe"
 
-      - name: VNC şifresi ayarla
+      - name: VNC sifresi ayarla
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "$env:USERPROFILE\.vnc" | Out-Null
           "siksiken" | & "C:\Program Files\TurboVNC\bin\vncpasswd.exe" -f | Out-File "$env:USERPROFILE\.vnc\passwd" -Encoding ascii
 
-      - name: TurboVNC başlat
+      - name: TurboVNC baslat
         shell: pwsh
         run: |
           Start-Process "C:\Program Files\TurboVNC\bin\vncserver.exe" -ArgumentList "-geometry 1920x1080 -depth 24 -localhost no :1"
@@ -46,6 +50,6 @@ jobs:
         run: |
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: Açık tut
+      - name: Acik tut
         shell: pwsh
         run: while ($true) { Start-Sleep -Seconds 60 }
