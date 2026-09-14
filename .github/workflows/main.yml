@@ -1,4 +1,4 @@
-name: TurboVNC-Son-Cozum
+name: TurboVNC-Basit
 on:
   workflow_dispatch:
 
@@ -20,59 +20,40 @@ jobs:
           wget https://github.com/TurboVNC/turbovnc/releases/download/3.2/turbovnc_3.2_amd64.deb -O /tmp/t.deb
           sudo apt install -y /tmp/t.deb
 
-      - name: Kullanıcı Oluştur
+      - name: Kullanıcı
         run: |
           sudo useradd -m siksiken || true
           echo "siksiken:siksiken" | sudo chpasswd
 
-      - name: VNC Ayarları — DOĞRU İZİNLER
+      - name: VNC Ayarları
         run: |
-          # Önce temizle
           sudo rm -rf /home/siksiken/.vnc
-          
-          # Klasörü KENDİSİ olarak oluştur
           sudo -u siksiken mkdir -p /home/siksiken/.vnc
           
-          # Şifreyi oluştur
-          echo -n "siksiken" | sudo -u siksiken /opt/TurboVNC/bin/vncpasswd -f | sudo tee /home/siksiken/.vnc/passwd > /dev/null
+          echo -n "siksiken" | sudo -u siksiken /opt/TurboVNC/bin/vncpasswd -f > /tmp/pw
+          sudo mv /tmp/pw /home/siksiken/.vnc/passwd
           
-          # SAHİPLİĞİ KULLANICIYA VER — EN ÖNEMLİSİ!
           sudo chown -R siksiken:siksiken /home/siksiken/.vnc
           sudo chmod 700 /home/siksiken/.vnc
           sudo chmod 600 /home/siksiken/.vnc/passwd
           
-          # xstartup dosyasını yaz
-          sudo -u siksiken bash -c 'cat > /home/siksiken/.vnc/xstartup << INNER_EOF
-#!/bin/bash
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-exec /usr/bin/startxfce4
-INNER_EOF'
+          echo '#!/bin/bash' > /tmp/start
+          echo 'unset SESSION_MANAGER' >> /tmp/start
+          echo 'unset DBUS_SESSION_BUS_ADDRESS' >> /tmp/start
+          echo 'exec /usr/bin/startxfce4' >> /tmp/start
           
+          sudo mv /tmp/start /home/siksiken/.vnc/xstartup
           sudo chmod +x /home/siksiken/.vnc/xstartup
           sudo chown siksiken:siksiken /home/siksiken/.vnc/xstartup
-          
-          # Kontrol et
-          ls -la /home/siksiken/.vnc/
 
-      - name: VNC'yi Başlat
+      - name: Başlat
         run: |
-          # Eski kilitleri sil
           rm -rf /tmp/.X1-lock /tmp/.X11-unix/X1
-          
-          # Önce öldür
           sudo -u siksiken /opt/TurboVNC/bin/vncserver -kill :1 || true
-          
-          # ŞİMDİ BAŞLAT
           sudo -u siksiken /opt/TurboVNC/bin/vncserver :1 -geometry 1280x720 -depth 24
           
           sleep 3
-          
-          echo "========================================"
-          echo "✅ BAŞARILI!"
           echo "IP: $(tailscale ip -4):5901"
-          echo "ŞİFRE: siksiken"
-          echo "========================================"
-          
+          echo "Şifre: siksiken"
           sleep 21600
           
