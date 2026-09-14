@@ -15,53 +15,75 @@ jobs:
           winget install --id Tailscale.Tailscale -e --silent --accept-package-agreements --accept-source-agreements
           Start-Sleep -Seconds 10
 
-      - name: Tailscale bağlan
+      - name: Tailscale baglan
         shell: pwsh
         run: |
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TS_AUTH_KEY }}" --hostname=gh-vnc --accept-routes
           Start-Sleep -Seconds 5
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: TurboVNC indir ve kur
+      - name: TurboVNC indir ve kur (tum parametreler)
         shell: pwsh
         run: |
           $url = "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe"
           Invoke-WebRequest $url -OutFile "$env:TEMP\turbovnc.exe"
-          Write-Host "Indirildi, kuruluyor..."
-          $p = Start-Process "$env:TEMP\turbovnc.exe" -ArgumentList "/S","/D=C:\TurboVNC" -PassThru
-          $p | Wait-Process -Timeout 180 -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 5
-          Write-Host "--- TurboVNC araniyor ---"
+          Write-Host "Indirildi. Parametreler deneniyor..."
+
+          $params = @(
+            @("/S"),
+            @("/S", "/D=C:\TurboVNC"),
+            @("/silent"),
+            @("/quiet"),
+            @("/S", "/NCRC"),
+            @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"),
+            @("/S", "/D=C:\TurboVNC", "/NCRC"),
+            @("-s"),
+            @("--silent")
+          )
+
+          foreach ($p in $params) {
+            Write-Host "=== Deneniyor: $($p -join ' ') ==="
+            $existing = Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($existing) {
+              Write-Host "Zaten kurulu: $($existing.FullName)"
+              break
+            }
+            try {
+              $proc = Start-Process "$env:TEMP\turbovnc.exe" -ArgumentList $p -PassThru -ErrorAction Stop
+              $proc | Wait-Process -Timeout 90 -ErrorAction SilentlyContinue
+            } catch {
+              Write-Host "Hata: $_"
+            }
+            Start-Sleep -Seconds 5
+            $found = Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($found) {
+              Write-Host "BASARILI! Bulundu: $($found.FullName)"
+              break
+            } else {
+              Write-Host "Bulunamadi, sonraki parametre..."
+            }
+          }
+
+          Write-Host "--- Son durum ---"
           Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
-          Get-ChildItem "C:\Program Files" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
-          Get-ChildItem "$env:USERPROFILE" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
+          Get-ChildItem "C:\" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
 
       - name: VNC sifresi ayarla
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force "$env:USERPROFILE\.vnc" | Out-Null
-          $paths = @(
-            "C:\TurboVNC\bin\vncpasswd.exe",
-            "C:\Program Files\TurboVNC\bin\vncpasswd.exe",
-            "C:\Program Files (x86)\TurboVNC\bin\vncpasswd.exe"
-          )
-          $vncpasswd = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $vncpasswd = Get-ChildItem "C:\" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $vncpasswd) { throw "vncpasswd.exe bulunamadi!" }
-          Write-Host "Bulundu: $vncpasswd"
-          "siksiken" | & $vncpasswd -f | Out-File "$env:USERPROFILE\.vnc\passwd" -Encoding ascii
+          Write-Host "Bulundu: $($vncpasswd.FullName)"
+          "siksiken" | & $vncpasswd.FullName -f | Out-File "$env:USERPROFILE\.vnc\passwd" -Encoding ascii
 
       - name: TurboVNC baslat
         shell: pwsh
         run: |
-          $paths = @(
-            "C:\TurboVNC\bin\vncserver.exe",
-            "C:\Program Files\TurboVNC\bin\vncserver.exe",
-            "C:\Program Files (x86)\TurboVNC\bin\vncserver.exe"
-          )
-          $vncserver = $paths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          $vncserver = Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $vncserver) { throw "vncserver.exe bulunamadi!" }
-          Write-Host "Bulundu: $vncserver"
-          Start-Process $vncserver -ArgumentList "-geometry 1920x1080 -depth 24 -localhost no :1"
+          Write-Host "Bulundu: $($vncserver.FullName)"
+          Start-Process $vncserver.FullName -ArgumentList "-geometry 1920x1080 -depth 24 -localhost no :1"
           Start-Sleep -Seconds 5
 
       - name: Tailscale IP yaz
