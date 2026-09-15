@@ -37,8 +37,9 @@ jobs:
           Start-Sleep -Seconds 10
           Write-Host "--- UltraVNC dosyalari ---"
           Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
 
-      - name: UltraVNC ayarla (sifresiz)
+      - name: VNC sifresi ayarla
         shell: pwsh
         run: |
           $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -46,12 +47,19 @@ jobs:
           $dir = $winvnc.Directory.FullName
           Write-Host "UltraVNC dizini: $dir"
 
-          # ultravnc.ini olustur - sifresiz mod
+          $vncpasswd = Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $vncpasswd) { throw "vncpasswd.exe bulunamadi!" }
+          Write-Host "Bulundu: $($vncpasswd.FullName)"
+
+          # vncpasswd.exe stdin ile sifreyi alir, -f ile dosyaya yazar
+          "siksiken" | & $vncpasswd.FullName -f | Out-File "$dir\ultravnc.passwd" -Encoding ascii
+          Write-Host "Sifre dosyasi olusturuldu: $dir\ultravnc.passwd"
+
+          # ultravnc.ini olustur
           $iniPath = Join-Path $dir "ultravnc.ini"
           $iniContent = @"
           [ultravnc]
-          passwd=
-          passwd2=
+          passwd=$dir\ultravnc.passwd
           [admin]
           FileTransferEnabled=1
           FTUserImpersonation=1
@@ -65,23 +73,9 @@ jobs:
           AutoPortSelect=0
           PortNumber=5900
           SocketConnect=1
-          AuthRequired=0
           "@
           $iniContent | Out-File $iniPath -Encoding ascii
-          Write-Host "ultravnc.ini yazildi (sifresiz): $iniPath"
-
-          # Registry'ye de sifresiz ayar
-          New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Force | Out-Null
-          New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Force -ErrorAction SilentlyContinue | Out-Null
-          $emptyPass = New-Object byte[] 8
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Name "Password" -Value $emptyPass -Type Binary -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "Password" -Value $emptyPass -Type Binary -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "PortNumber" -Value 5900 -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AllowLoopback" -Value 1 -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "LoopbackOnly" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "HTTPConnect" -Value 1 -Type DWord -ErrorAction SilentlyContinue
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AutoPortSelect" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-          Write-Host "Registry sifresiz ayarlandi."
+          Write-Host "ultravnc.ini yazildi: $iniPath"
 
       - name: UltraVNC baslat
         shell: pwsh
