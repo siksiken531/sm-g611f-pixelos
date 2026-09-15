@@ -32,15 +32,6 @@ jobs:
           sudo apt-get install -y -qq /tmp/turbovnc.deb
           echo "--- TurboVNC kurulum kontrolu ---"
           ls -la /opt/TurboVNC/bin/ || true
-          which vncserver || true
-          ls -la /opt/TurboVNC/bin/vncserver || true
-          ls -la /opt/TurboVNC/bin/vncpasswd || true
-
-      - name: TurboVNC PATH'e ekle
-        run: |
-          echo "/opt/TurboVNC/bin" >> $GITHUB_PATH
-          export PATH="/opt/TurboVNC/bin:$PATH"
-          /opt/TurboVNC/bin/vncserver -version || echo "vncserver bulunamadi"
 
       - name: VNC sifresi ayarla
         run: |
@@ -58,11 +49,10 @@ jobs:
           exec startxfce4
           EOF
           chmod +x ~/.vnc/xstartup
-          cat ~/.vnc/xstartup
 
       - name: TurboVNC baslat
         run: |
-          /opt/TurboVNC/bin/vncserver -geometry 1920x1080 -depth 24 -localhost no :1
+          /opt/TurboVNC/bin/vncserver :1 -geometry 1920x1080 -depth 24 -rfbport 5901
           sleep 5
           echo "--- VNC process ---"
           ps aux | grep -i vnc | grep -v grep || true
