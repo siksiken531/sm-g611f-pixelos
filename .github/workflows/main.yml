@@ -22,14 +22,14 @@ jobs:
           Start-Sleep -Seconds 5
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: UltraVNC indir
+      - name: UltraVNC indir (Drive'dan)
         shell: pwsh
         run: |
-          $url = "https://uvnc.com/all/send/3-setup/502-ultravnc-1824-x64-setup.html"
+          $url = "https://drive.google.com/uc?export=download&id=16Xj-q-grgHSMd23jwr6bV7zULMbT8CHI"
           Invoke-WebRequest $url -OutFile "$env:TEMP\ultravnc.exe" -UseBasicParsing -MaximumRedirection 20 -UserAgent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
           $size = (Get-Item "$env:TEMP\ultravnc.exe").Length
           Write-Host "Indirilen boyut: $size bytes"
-          if ($size -lt 3000000) { throw "Indirilen dosya cok kucuk, muhtemelen HTML sayfasi!" }
+          if ($size -lt 3000000) { throw "Indirilen dosya cok kucuk, HTML sayfasi gelmis olabilir!" }
           Write-Host "Basarili indirildi."
 
       - name: UltraVNC kur
