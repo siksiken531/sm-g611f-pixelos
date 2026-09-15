@@ -1,109 +1,81 @@
-name: Windows UltraVNC
+name: Linux TurboVNC
 
 on:
   workflow_dispatch:
 
 jobs:
   vnc:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
       - name: Repoyu cek
         uses: actions/checkout@v4
 
-      - name: Tailscale winget ile kur
-        shell: pwsh
-        run: |
-          winget install --id Tailscale.Tailscale -e --silent --accept-package-agreements --accept-source-agreements
-          Start-Sleep -Seconds 10
-
       - name: Tailscale baglan
-        shell: pwsh
-        run: |
-          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TS_AUTH_KEY }}" --hostname=gh-vnc --accept-routes
-          Start-Sleep -Seconds 5
-          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TS_AUTH_KEY }}
 
-      - name: UltraVNC kur
-        shell: pwsh
+      - name: Masaustu kur
         run: |
-          $setup = Get-ChildItem -Recurse -Filter "UltraVNC*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $setup) { throw "UltraVNC setup dosyasi repoda bulunamadi!" }
-          Write-Host "Bulundu: $($setup.FullName)"
-          Write-Host "Boyut: $((Get-Item $setup.FullName).Length) bytes"
-          $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -PassThru
-          $p | Wait-Process -Timeout 180 -ErrorAction SilentlyContinue
-          Start-Sleep -Seconds 10
-          Write-Host "--- UltraVNC dosyalari ---"
-          Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
-          Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq \
+            xfce4 xfce4-goodies xfce4-terminal \
+            dbus-x11 x11-xserver-utils \
+            wget curl ca-certificates
+
+      - name: TurboVNC kur
+        run: |
+          wget -q https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb -O /tmp/turbovnc.deb
+          ls -la /tmp/turbovnc.deb
+          sudo apt-get install -y -qq /tmp/turbovnc.deb
+          echo "--- TurboVNC kurulum kontrolu ---"
+          ls -la /opt/TurboVNC/bin/ || true
+          which vncserver || true
+          ls -la /opt/TurboVNC/bin/vncserver || true
+          ls -la /opt/TurboVNC/bin/vncpasswd || true
+
+      - name: TurboVNC PATH'e ekle
+        run: |
+          echo "/opt/TurboVNC/bin" >> $GITHUB_PATH
+          export PATH="/opt/TurboVNC/bin:$PATH"
+          /opt/TurboVNC/bin/vncserver -version || echo "vncserver bulunamadi"
 
       - name: VNC sifresi ayarla
-        shell: pwsh
         run: |
-          $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
-          $dir = $winvnc.Directory.FullName
-          Write-Host "UltraVNC dizini: $dir"
+          mkdir -p ~/.vnc
+          echo "siksiken" | /opt/TurboVNC/bin/vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+          ls -la ~/.vnc/
 
-          $vncpasswd = Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $vncpasswd) { throw "vncpasswd.exe bulunamadi!" }
-          Write-Host "Bulundu: $($vncpasswd.FullName)"
-
-          # vncpasswd.exe stdin ile sifreyi alir, -f ile dosyaya yazar
-          "siksiken" | & $vncpasswd.FullName -f | Out-File "$dir\ultravnc.passwd" -Encoding ascii
-          Write-Host "Sifre dosyasi olusturuldu: $dir\ultravnc.passwd"
-
-          # ultravnc.ini olustur
-          $iniPath = Join-Path $dir "ultravnc.ini"
-          $iniContent = @"
-          [ultravnc]
-          passwd=$dir\ultravnc.passwd
-          [admin]
-          FileTransferEnabled=1
-          FTUserImpersonation=1
-          BlankMonitorEnabled=1
-          CaptureAlphaBlending=1
-          BlackAlphaBlending=0
-          UseRegistry=0
-          AllowLoopback=1
-          LoopbackOnly=0
-          HTTPConnect=1
-          AutoPortSelect=0
-          PortNumber=5900
-          SocketConnect=1
-          "@
-          $iniContent | Out-File $iniPath -Encoding ascii
-          Write-Host "ultravnc.ini yazildi: $iniPath"
-
-      - name: UltraVNC baslat
-        shell: pwsh
+      - name: VNC xstartup yapilandir
         run: |
-          $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
-          Write-Host "Bulundu: $($winvnc.FullName)"
+          cat > ~/.vnc/xstartup << 'EOF'
+          #!/bin/sh
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          exec startxfce4
+          EOF
+          chmod +x ~/.vnc/xstartup
+          cat ~/.vnc/xstartup
 
-          Get-Process winvnc -ErrorAction SilentlyContinue | Stop-Process -Force
-          Start-Sleep -Seconds 3
-
-          & $winvnc.FullName -install
-          Start-Sleep -Seconds 3
-          & $winvnc.FullName -run
-          Start-Sleep -Seconds 10
-
-          Get-Process winvnc -ErrorAction SilentlyContinue | Select-Object Name, Id
-          Write-Host "--- Portlar ---"
-          Get-NetTCPConnection -LocalPort 5900,5901 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, State
-
-          New-NetFirewallRule -DisplayName "UltraVNC 5900" -Direction Inbound -Protocol TCP -LocalPort 5900,5901 -Action Allow -ErrorAction SilentlyContinue
-          Write-Host "Firewall kurali eklendi."
+      - name: TurboVNC baslat
+        run: |
+          /opt/TurboVNC/bin/vncserver -geometry 1920x1080 -depth 24 -localhost no :1
+          sleep 5
+          echo "--- VNC process ---"
+          ps aux | grep -i vnc | grep -v grep || true
+          echo "--- Portlar ---"
+          ss -tlnp | grep 590 || true
+          echo "--- vncserver list ---"
+          /opt/TurboVNC/bin/vncserver -list || true
 
       - name: Tailscale IP yaz
-        shell: pwsh
         run: |
-          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+          tailscale ip -4
 
       - name: Acik tut
-        shell: pwsh
-        run: while ($true) { Start-Sleep -Seconds 60 }
+        run: |
+          echo "VNC hazir. Tailscale IP:5901 ile baglan."
+          while true; do sleep 60; done
