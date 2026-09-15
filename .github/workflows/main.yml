@@ -1,4 +1,4 @@
-name: Windows TurboVNC
+name: Windows UltraVNC
 
 on:
   workflow_dispatch:
@@ -22,69 +22,40 @@ jobs:
           Start-Sleep -Seconds 5
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: TurboVNC indir ve kur (tum parametreler)
+      - name: UltraVNC winget ile kur
         shell: pwsh
         run: |
-          $url = "https://github.com/TurboVNC/turbovnc/releases/download/3.3.1/TurboVNC-3.3.1-x64.exe"
-          Invoke-WebRequest $url -OutFile "$env:TEMP\turbovnc.exe"
-          Write-Host "Indirildi. Parametreler deneniyor..."
-
-          $params = @(
-            @("/S"),
-            @("/S", "/D=C:\TurboVNC"),
-            @("/silent"),
-            @("/quiet"),
-            @("/S", "/NCRC"),
-            @("/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART"),
-            @("/S", "/D=C:\TurboVNC", "/NCRC"),
-            @("-s"),
-            @("--silent")
-          )
-
-          foreach ($p in $params) {
-            Write-Host "=== Deneniyor: $($p -join ' ') ==="
-            $existing = Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($existing) {
-              Write-Host "Zaten kurulu: $($existing.FullName)"
-              break
-            }
-            try {
-              $proc = Start-Process "$env:TEMP\turbovnc.exe" -ArgumentList $p -PassThru -ErrorAction Stop
-              $proc | Wait-Process -Timeout 90 -ErrorAction SilentlyContinue
-            } catch {
-              Write-Host "Hata: $_"
-            }
-            Start-Sleep -Seconds 5
-            $found = Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-            if ($found) {
-              Write-Host "BASARILI! Bulundu: $($found.FullName)"
-              break
-            } else {
-              Write-Host "Bulunamadi, sonraki parametre..."
-            }
-          }
-
-          Write-Host "--- Son durum ---"
-          Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
-          Get-ChildItem "C:\" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 5 FullName
+          winget install --id uvncbvba.UltraVnc -e --silent --accept-package-agreements --accept-source-agreements
+          Start-Sleep -Seconds 10
+          Write-Host "--- UltraVNC araniyor ---"
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "uvnc_settings.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
 
       - name: VNC sifresi ayarla
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "$env:USERPROFILE\.vnc" | Out-Null
-          $vncpasswd = Get-ChildItem "C:\" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          New-Item -ItemType Directory -Force "C:\Program Files\uvnc bvba\UltraVNC" -ErrorAction SilentlyContinue | Out-Null
+          $vncpasswd = Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $vncpasswd) { throw "vncpasswd.exe bulunamadi!" }
           Write-Host "Bulundu: $($vncpasswd.FullName)"
-          "siksiken" | & $vncpasswd.FullName -f | Out-File "$env:USERPROFILE\.vnc\passwd" -Encoding ascii
+          $passfile = Join-Path $vncpasswd.Directory.FullName "ultravnc.passwd"
+          "siksiken" | & $vncpasswd.FullName -f | Out-File $passfile -Encoding ascii
+          Copy-Item $passfile "$env:USERPROFILE\ultravnc.passwd" -Force -ErrorAction SilentlyContinue
+          Write-Host "Sifre dosyasi: $passfile"
 
-      - name: TurboVNC baslat
+      - name: UltraVNC baslat
         shell: pwsh
         run: |
-          $vncserver = Get-ChildItem "C:\" -Recurse -Filter "vncserver.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $vncserver) { throw "vncserver.exe bulunamadi!" }
-          Write-Host "Bulundu: $($vncserver.FullName)"
-          Start-Process $vncserver.FullName -ArgumentList "-geometry 1920x1080 -depth 24 -localhost no :1"
-          Start-Sleep -Seconds 5
+          $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
+          Write-Host "Bulundu: $($winvnc.FullName)"
+          $dir = $winvnc.Directory.FullName
+          Start-Process $winvnc.FullName -ArgumentList "-run" -WorkingDirectory $dir
+          Start-Sleep -Seconds 10
+          Get-Process winvnc -ErrorAction SilentlyContinue | Select-Object Name, Id
+          Write-Host "--- Portlar ---"
+          Get-NetTCPConnection -LocalPort 5900,5901 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, State
 
       - name: Tailscale IP yaz
         shell: pwsh
