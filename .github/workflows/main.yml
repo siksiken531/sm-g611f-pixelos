@@ -37,10 +37,8 @@ jobs:
           Start-Sleep -Seconds 10
           Write-Host "--- UltraVNC dosyalari ---"
           Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
-          Get-ChildItem "C:\Program Files" -Recurse -Filter "setpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
-          Get-ChildItem "C:\Program Files" -Recurse -Filter "uvnc_settings.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
 
-      - name: VNC sifresi ayarla (setpasswd.exe)
+      - name: UltraVNC ayarla (sifresiz)
         shell: pwsh
         run: |
           $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
@@ -48,31 +46,42 @@ jobs:
           $dir = $winvnc.Directory.FullName
           Write-Host "UltraVNC dizini: $dir"
 
-          $setpasswd = Get-ChildItem "C:\Program Files" -Recurse -Filter "setpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $setpasswd) { throw "setpasswd.exe bulunamadi!" }
-          Write-Host "Bulundu: $($setpasswd.FullName)"
+          # ultravnc.ini olustur - sifresiz mod
+          $iniPath = Join-Path $dir "ultravnc.ini"
+          $iniContent = @"
+          [ultravnc]
+          passwd=
+          passwd2=
+          [admin]
+          FileTransferEnabled=1
+          FTUserImpersonation=1
+          BlankMonitorEnabled=1
+          CaptureAlphaBlending=1
+          BlackAlphaBlending=0
+          UseRegistry=0
+          AllowLoopback=1
+          LoopbackOnly=0
+          HTTPConnect=1
+          AutoPortSelect=0
+          PortNumber=5900
+          SocketConnect=1
+          AuthRequired=0
+          "@
+          $iniContent | Out-File $iniPath -Encoding ascii
+          Write-Host "ultravnc.ini yazildi (sifresiz): $iniPath"
 
-          # setpasswd.exe sifreyi parametre olarak alir
-          Write-Host "Sifre ayarlaniyor..."
-          & $setpasswd.FullName "siksiken"
-          Start-Sleep -Seconds 3
-
-          # Registry yedegi
+          # Registry'ye de sifresiz ayar
           New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Force | Out-Null
-          $pass = [System.Text.Encoding]::ASCII.GetBytes("siksiken")
-          $key = New-Object byte[] 8
-          [Array]::Copy($pass, $key, [Math]::Min($pass.Length, 8))
-          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Name "Password" -Value $key -Type Binary
-
-          # Port ve ayarlar
           New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Force -ErrorAction SilentlyContinue | Out-Null
+          $emptyPass = New-Object byte[] 8
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Name "Password" -Value $emptyPass -Type Binary -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "Password" -Value $emptyPass -Type Binary -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "PortNumber" -Value 5900 -Type DWord -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AllowLoopback" -Value 1 -Type DWord -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "LoopbackOnly" -Value 0 -Type DWord -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "HTTPConnect" -Value 1 -Type DWord -ErrorAction SilentlyContinue
           Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AutoPortSelect" -Value 0 -Type DWord -ErrorAction SilentlyContinue
-
-          Write-Host "Sifre ayarlandi."
+          Write-Host "Registry sifresiz ayarlandi."
 
       - name: UltraVNC baslat
         shell: pwsh
@@ -80,6 +89,9 @@ jobs:
           $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
           Write-Host "Bulundu: $($winvnc.FullName)"
+
+          Get-Process winvnc -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep -Seconds 3
 
           & $winvnc.FullName -install
           Start-Sleep -Seconds 3
@@ -90,7 +102,6 @@ jobs:
           Write-Host "--- Portlar ---"
           Get-NetTCPConnection -LocalPort 5900,5901 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, State
 
-          # Firewall kurali
           New-NetFirewallRule -DisplayName "UltraVNC 5900" -Direction Inbound -Protocol TCP -LocalPort 5900,5901 -Action Allow -ErrorAction SilentlyContinue
           Write-Host "Firewall kurali eklendi."
 
