@@ -31,34 +31,104 @@ jobs:
           $setup = Get-ChildItem -Recurse -Filter "UltraVNC*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $setup) { throw "UltraVNC setup dosyasi repoda bulunamadi!" }
           Write-Host "Bulundu: $($setup.FullName)"
-          $size = (Get-Item $setup.FullName).Length
-          Write-Host "Boyut: $size bytes"
-          Write-Host "Kuruluyor..."
+          Write-Host "Boyut: $((Get-Item $setup.FullName).Length) bytes"
           $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -PassThru
           $p | Wait-Process -Timeout 180 -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 10
-          Write-Host "--- UltraVNC araniyor ---"
+          Write-Host "--- UltraVNC dosyalari ---"
           Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
           Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "uvnc_settings.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "setpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
 
-      - name: VNC sifresi ayarla
+      - name: VNC sifresi ayarla (3 yontem)
         shell: pwsh
         run: |
+          $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
+          $dir = $winvnc.Directory.FullName
+          Write-Host "UltraVNC dizini: $dir"
+
+          # --- YONTEM 1: vncpasswd.exe ---
           $vncpasswd = Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $vncpasswd) { throw "vncpasswd.exe bulunamadi!" }
-          Write-Host "Bulundu: $($vncpasswd.FullName)"
-          $passfile = Join-Path $vncpasswd.Directory.FullName "ultravnc.passwd"
-          "siksiken" | & $vncpasswd.FullName -f | Out-File $passfile -Encoding ascii
-          Write-Host "Sifre dosyasi: $passfile"
+          if ($vncpasswd) {
+            Write-Host "[1] vncpasswd bulundu: $($vncpasswd.FullName)"
+            try {
+              "siksiken" | & $vncpasswd.FullName -f | Out-File "$dir\ultravnc.passwd" -Encoding ascii
+              Write-Host "[1] sifre dosyasi olusturuldu."
+            } catch { Write-Host "[1] hata: $_" }
+          } else {
+            Write-Host "[1] vncpasswd.exe yok."
+          }
+
+          # --- YONTEM 2: uvnc_settings.exe ---
+          $uvncSettings = Get-ChildItem "C:\Program Files" -Recurse -Filter "uvnc_settings.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($uvncSettings) {
+            Write-Host "[2] uvnc_settings bulundu: $($uvncSettings.FullName)"
+            try {
+              # ini dosyasi olustur, uvnc_settings -ultravnc.ini ile yukler
+              $iniContent = @"
+          [ultravnc]
+          passwd=5c2a3e1f9b8d7c4e
+          [admin]
+          FileTransferEnabled=1
+          FTUserImpersonation=1
+          BlankMonitorEnabled=1
+          CaptureAlphaBlending=1
+          BlackAlphaBlending=0
+          UseRegistry=1
+          AllowLoopback=1
+          LoopbackOnly=0
+          HTTPConnect=1
+          AutoPortSelect=0
+          PortNumber=5900
+          SocketConnect=1
+          "@
+              $iniContent | Out-File "$dir\ultravnc.ini" -Encoding ascii
+              Write-Host "[2] ultravnc.ini olusturuldu."
+              # uvnc_settings -ultravnc.ini <path> ile sifreyi yukler
+              Start-Process $uvncSettings.FullName -ArgumentList "-ultravnc.ini","$dir\ultravnc.ini" -Wait -ErrorAction SilentlyContinue
+              Write-Host "[2] uvnc_settings calistirildi."
+            } catch { Write-Host "[2] hata: $_" }
+          } else {
+            Write-Host "[2] uvnc_settings.exe yok."
+          }
+
+          # --- YONTEM 3: Registry ---
+          Write-Host "[3] Registry yontemi..."
+          try {
+            New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Force | Out-Null
+            $pass = [System.Text.Encoding]::ASCII.GetBytes("siksiken")
+            $key = New-Object byte[] 8
+            [Array]::Copy($pass, $key, [Math]::Min($pass.Length, 8))
+            Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Name "Password" -Value $key -Type Binary
+            Write-Host "[3] Registry'e sifre yazildi."
+          } catch { Write-Host "[3] hata: $_" }
+
+          # Registry'ye diger ayarlar
+          New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Force -ErrorAction SilentlyContinue | Out-Null
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "PortNumber" -Value 5900 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AllowLoopback" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "LoopbackOnly" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "HTTPConnect" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AutoPortSelect" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+          Write-Host "Sifre ayarlari tamamlandi."
 
       - name: UltraVNC baslat
         shell: pwsh
         run: |
           $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
+          $dir = $winvnc.Directory.FullName
           Write-Host "Bulundu: $($winvnc.FullName)"
-          Start-Process $winvnc.FullName -ArgumentList "-run" -WorkingDirectory $winvnc.Directory.FullName
+
+          # Servis olarak kur ve baslat
+          & $winvnc.FullName -install
+          Start-Sleep -Seconds 3
+          & $winvnc.FullName -run
           Start-Sleep -Seconds 10
+
           Get-Process winvnc -ErrorAction SilentlyContinue | Select-Object Name, Id
           Write-Host "--- Portlar ---"
           Get-NetTCPConnection -LocalPort 5900,5901 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, State
