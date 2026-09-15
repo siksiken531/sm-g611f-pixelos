@@ -1,1 +1,104 @@
+name: Windows UltraVNC
 
+on:
+  workflow_dispatch:
+
+jobs:
+  vnc:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Repoyu cek
+        uses: actions/checkout@v4
+
+      - name: Tailscale winget ile kur
+        shell: pwsh
+        run: |
+          winget install --id Tailscale.Tailscale -e --silent --accept-package-agreements --accept-source-agreements
+          Start-Sleep -Seconds 10
+
+      - name: Tailscale baglan
+        shell: pwsh
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey="${{ secrets.TS_AUTH_KEY }}" --hostname=gh-vnc --accept-routes
+          Start-Sleep -Seconds 5
+          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+
+      - name: UltraVNC kur
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem -Recurse -Filter "UltraVNC*.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $setup) { throw "UltraVNC setup dosyasi repoda bulunamadi!" }
+          Write-Host "Bulundu: $($setup.FullName)"
+          Write-Host "Boyut: $((Get-Item $setup.FullName).Length) bytes"
+          $p = Start-Process $setup.FullName -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -PassThru
+          $p | Wait-Process -Timeout 180 -ErrorAction SilentlyContinue
+          Start-Sleep -Seconds 10
+          Write-Host "--- UltraVNC dosyalari ---"
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "setpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+          Get-ChildItem "C:\Program Files" -Recurse -Filter "uvnc_settings.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
+
+      - name: VNC sifresi ayarla (setpasswd.exe)
+        shell: pwsh
+        run: |
+          $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
+          $dir = $winvnc.Directory.FullName
+          Write-Host "UltraVNC dizini: $dir"
+
+          $setpasswd = Get-ChildItem "C:\Program Files" -Recurse -Filter "setpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $setpasswd) { throw "setpasswd.exe bulunamadi!" }
+          Write-Host "Bulundu: $($setpasswd.FullName)"
+
+          # setpasswd.exe sifreyi parametre olarak alir
+          Write-Host "Sifre ayarlaniyor..."
+          & $setpasswd.FullName "siksiken"
+          Start-Sleep -Seconds 3
+
+          # Registry yedegi
+          New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Force | Out-Null
+          $pass = [System.Text.Encoding]::ASCII.GetBytes("siksiken")
+          $key = New-Object byte[] 8
+          [Array]::Copy($pass, $key, [Math]::Min($pass.Length, 8))
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3" -Name "Password" -Value $key -Type Binary
+
+          # Port ve ayarlar
+          New-Item -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Force -ErrorAction SilentlyContinue | Out-Null
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "PortNumber" -Value 5900 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AllowLoopback" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "LoopbackOnly" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "HTTPConnect" -Value 1 -Type DWord -ErrorAction SilentlyContinue
+          Set-ItemProperty -Path "HKLM:\SOFTWARE\ORL\WinVNC3\Default" -Name "AutoPortSelect" -Value 0 -Type DWord -ErrorAction SilentlyContinue
+
+          Write-Host "Sifre ayarlandi."
+
+      - name: UltraVNC baslat
+        shell: pwsh
+        run: |
+          $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
+          Write-Host "Bulundu: $($winvnc.FullName)"
+
+          & $winvnc.FullName -install
+          Start-Sleep -Seconds 3
+          & $winvnc.FullName -run
+          Start-Sleep -Seconds 10
+
+          Get-Process winvnc -ErrorAction SilentlyContinue | Select-Object Name, Id
+          Write-Host "--- Portlar ---"
+          Get-NetTCPConnection -LocalPort 5900,5901 -ErrorAction SilentlyContinue | Select-Object LocalAddress, LocalPort, State
+
+          # Firewall kurali
+          New-NetFirewallRule -DisplayName "UltraVNC 5900" -Direction Inbound -Protocol TCP -LocalPort 5900,5901 -Action Allow -ErrorAction SilentlyContinue
+          Write-Host "Firewall kurali eklendi."
+
+      - name: Tailscale IP yaz
+        shell: pwsh
+        run: |
+          & "C:\Program Files\Tailscale\tailscale.exe" ip -4
+
+      - name: Acik tut
+        shell: pwsh
+        run: while ($true) { Start-Sleep -Seconds 60 }
