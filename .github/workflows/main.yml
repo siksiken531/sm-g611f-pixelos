@@ -22,26 +22,35 @@ jobs:
           Start-Sleep -Seconds 5
           & "C:\Program Files\Tailscale\tailscale.exe" ip -4
 
-      - name: UltraVNC winget ile kur
+      - name: UltraVNC indir
         shell: pwsh
         run: |
-          winget install --id uvncbvba.UltraVnc -e --silent --accept-package-agreements --accept-source-agreements
+          $url = "https://uvnc.com/all/send/3-setup/502-ultravnc-1824-x64-setup.html"
+          Invoke-WebRequest $url -OutFile "$env:TEMP\ultravnc.exe" -UseBasicParsing -MaximumRedirection 20 -UserAgent "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+          $size = (Get-Item "$env:TEMP\ultravnc.exe").Length
+          Write-Host "Indirilen boyut: $size bytes"
+          if ($size -lt 3000000) { throw "Indirilen dosya cok kucuk, muhtemelen HTML sayfasi!" }
+          Write-Host "Basarili indirildi."
+
+      - name: UltraVNC kur
+        shell: pwsh
+        run: |
+          Write-Host "Kuruluyor..."
+          $p = Start-Process "$env:TEMP\ultravnc.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/SP-" -PassThru
+          $p | Wait-Process -Timeout 180 -ErrorAction SilentlyContinue
           Start-Sleep -Seconds 10
           Write-Host "--- UltraVNC araniyor ---"
           Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
           Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
-          Get-ChildItem "C:\Program Files" -Recurse -Filter "uvnc_settings.exe" -ErrorAction SilentlyContinue | Select-Object -First 3 FullName
 
       - name: VNC sifresi ayarla
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "C:\Program Files\uvnc bvba\UltraVNC" -ErrorAction SilentlyContinue | Out-Null
           $vncpasswd = Get-ChildItem "C:\Program Files" -Recurse -Filter "vncpasswd.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $vncpasswd) { throw "vncpasswd.exe bulunamadi!" }
           Write-Host "Bulundu: $($vncpasswd.FullName)"
           $passfile = Join-Path $vncpasswd.Directory.FullName "ultravnc.passwd"
           "siksiken" | & $vncpasswd.FullName -f | Out-File $passfile -Encoding ascii
-          Copy-Item $passfile "$env:USERPROFILE\ultravnc.passwd" -Force -ErrorAction SilentlyContinue
           Write-Host "Sifre dosyasi: $passfile"
 
       - name: UltraVNC baslat
@@ -50,8 +59,7 @@ jobs:
           $winvnc = Get-ChildItem "C:\Program Files" -Recurse -Filter "winvnc.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $winvnc) { throw "winvnc.exe bulunamadi!" }
           Write-Host "Bulundu: $($winvnc.FullName)"
-          $dir = $winvnc.Directory.FullName
-          Start-Process $winvnc.FullName -ArgumentList "-run" -WorkingDirectory $dir
+          Start-Process $winvnc.FullName -ArgumentList "-run" -WorkingDirectory $winvnc.Directory.FullName
           Start-Sleep -Seconds 10
           Get-Process winvnc -ErrorAction SilentlyContinue | Select-Object Name, Id
           Write-Host "--- Portlar ---"
