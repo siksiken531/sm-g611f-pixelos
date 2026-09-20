@@ -1,71 +1,71 @@
-name: Linux TurboVNC
+name: Windows VNC via Tailscale
 
 on:
   workflow_dispatch:
 
 jobs:
   vnc:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     timeout-minutes: 360
 
     steps:
-      - name: Repoyu cek
-        uses: actions/checkout@v4
-
-      - name: Tailscale baglan
-        uses: tailscale/github-action@v2
-        with:
-          authkey: ${{ secrets.TS_AUTH_KEY }}
-
-      - name: Masaustu kur
+      - name: Tailscale kur (winget)
+        shell: pwsh
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq \
-            xfce4 xfce4-goodies xfce4-terminal \
-            dbus-x11 x11-xserver-utils \
-            wget curl ca-certificates
+          winget install --id Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
+          # PATH güncellemesi için yeni shell'e gerek yok, direkt exe yolu:
+          $ts = "C:\Program Files\Tailscale\tailscale.exe"
+          if (!(Test-Path $ts)) { Write-Error "Tailscale kurulamadı!" }
+          & $ts version
 
-      - name: TurboVNC kur
+      - name: Tailscale servisini başlat
+        shell: pwsh
         run: |
-          wget -q https://github.com/TurboVNC/turbovnc/releases/download/3.1.1/turbovnc_3.1.1_amd64.deb -O /tmp/turbovnc.deb
-          ls -la /tmp/turbovnc.deb
-          sudo apt-get install -y -qq /tmp/turbovnc.deb
-          echo "--- TurboVNC kurulum kontrolu ---"
-          ls -la /opt/TurboVNC/bin/ || true
+          Start-Service Tailscale
+          Set-Service Tailscale -StartupType Automatic
+          Start-Sleep -Seconds 5
 
-      - name: VNC sifresi ayarla
+      - name: Tailscale'e auth link ile bağlan
+        shell: pwsh
         run: |
-          mkdir -p ~/.vnc
-          echo "siksiken" | /opt/TurboVNC/bin/vncpasswd -f > ~/.vnc/passwd
-          chmod 600 ~/.vnc/passwd
-          ls -la ~/.vnc/
+          $ts = "C:\Program Files\Tailscale\tailscale.exe"
+          Write-Host "=========================================="
+          Write-Host " ASAGIDAKI LINKI AC VE TAILSCALE HESABINLA GIR"
+          Write-Host "=========================================="
+          # --qr yerine normal auth URL basar, log'da görünür
+          & $ts up --accept-routes --accept-dns=false --timeout=10m 2>&1 | Tee-Object -FilePath "$env:TEMP\ts.log"
+          Get-Content "$env:TEMP\ts.log"
+          Write-Host "=========================================="
 
-      - name: VNC xstartup yapilandir
+      - name: Baglanti bekle ve IP'yi goster
+        shell: pwsh
         run: |
-          cat > ~/.vnc/xstartup << 'EOF'
-          #!/bin/sh
-          unset SESSION_MANAGER
-          unset DBUS_SESSION_BUS_ADDRESS
-          exec startxfce4
-          EOF
-          chmod +x ~/.vnc/xstartup
+          $ts = "C:\Program Files\Tailscale\tailscale.exe"
+          for ($i=0; $i -lt 60; $i++) {
+            $ip = & $ts ip -4 2>$null
+            if ($ip) { break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $ip) { Write-Error "Tailscale baglanamadi! Link'e tikladin mi?" }
+          Write-Host "=========================================="
+          Write-Host " TAILSCALE IP: $ip"
+          Write-Host " VNC PORT: 5900"
+          Write-Host " KULLANICI: siksiken"
+          Write-Host " SIFRE: siksiken"
+          Write-Host "=========================================="
 
-      - name: TurboVNC baslat
+      - name: TightVNC kur ve baslat
+        shell: pwsh
         run: |
-          /opt/TurboVNC/bin/vncserver :1 -geometry 1920x1080 -depth 24 -rfbport 5901
-          sleep 5
-          echo "--- VNC process ---"
-          ps aux | grep -i vnc | grep -v grep || true
-          echo "--- Portlar ---"
-          ss -tlnp | grep 590 || true
-          echo "--- vncserver list ---"
-          /opt/TurboVNC/bin/vncserver -list || true
+          $url = "https://www.tightvnc.com/download/2.8.81/tightvnc-2.8.81-gpl-setup-64bit.msi"
+          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\tightvnc.msi"
+          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tightvnc.msi`" /quiet /norestart ADDLOCAL=Server SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=1 SET_PASSWORD=1 VALUE_OF_PASSWORD=siksiken SET_VIEWONLYPASSWORD=0 VALUE_OF_VIEWONLYPASSWORD=siksiken SET_ALLOWLOOPBACK=1 VALUE_OF_ALLOWLOOPBACK=1" -Wait
+          Start-Service tvnserver
+          Set-Service tvnserver -StartupType Automatic
+          New-NetFirewallRule -DisplayName "VNC" -Direction Inbound -Protocol TCP -LocalPort 5900 -Action Allow
 
-      - name: Tailscale IP yaz
+      - name: Canli tut (6 saat)
+        shell: pwsh
         run: |
-          tailscale ip -4
-
-      - name: Acik tut
-        run: |
-          echo "VNC hazir. Tailscale IP:5901 ile baglan."
-          while true; do sleep 60; done
+          Write-Host "HAZIR! TightVNC Viewer ile baglan."
+          Start-Sleep -Seconds 21000
