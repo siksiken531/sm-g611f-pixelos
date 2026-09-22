@@ -1,80 +1,226 @@
-name: Ubuntu noVNC via Tailscale
+name: RDP
+
+
 
 on:
+
   workflow_dispatch:
 
+
+
 jobs:
-  vnc:
-    runs-on: ubuntu-latest
-    timeout-minutes: 360
+
+  secure-rdp:
+
+    runs-on: windows-latest
+
+    timeout-minutes: 3600
+
+
 
     steps:
-      - name: Runner bilgisi
+
+      - name: Configure Core RDP Settings
+
         run: |
-          echo "IP: $(curl -s ifconfig.me)"
-          echo "Ülke: $(curl -s ipinfo.io/country)"
-          echo "Şehir: $(curl -s ipinfo.io/city)"
 
-      - name: Tailscale kur
+          # Enable Remote Desktop and disable Network Level Authentication (if needed)
+
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+
+                             -Name "fDenyTSConnections" -Value 0 -Force
+
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+
+                             -Name "UserAuthentication" -Value 0 -Force
+
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' `
+
+                             -Name "SecurityLayer" -Value 0 -Force
+
+
+
+          # Remove any existing rule with the same name to avoid duplication
+
+          netsh advfirewall firewall delete rule name="RDP-Tailscale"
+
+          
+
+          # For testing, allow any incoming connection on port 3389
+
+          netsh advfirewall firewall add rule name="RDP-Tailscale" `
+
+            dir=in action=allow protocol=TCP localport=3389
+
+
+
+          # (Optional) Restart the Remote Desktop service to ensure changes take effect
+
+          Restart-Service -Name TermService -Force
+
+
+
+      - name: Create RDP User with Secure Password
+
         run: |
-          curl -fsSL https://tailscale.com/install.sh | sh
 
-      - name: Tailscale servisini başlat
+          Add-Type -AssemblyName System.Security
+
+          $charSet = @{
+
+              Upper   = [char[]](65..90)      # A-Z
+
+              Lower   = [char[]](97..122)     # a-z
+
+              Number  = [char[]](48..57)      # 0-9
+
+              Special = ([char[]](33..47) + [char[]](58..64) +
+
+                         [char[]](91..96) + [char[]](123..126)) # Special characters
+
+          }
+
+          $rawPassword = @()
+
+          $rawPassword += $charSet.Upper | Get-Random -Count 4
+
+          $rawPassword += $charSet.Lower | Get-Random -Count 4
+
+          $rawPassword += $charSet.Number | Get-Random -Count 4
+
+          $rawPassword += $charSet.Special | Get-Random -Count 4
+
+          $password = -join ($rawPassword | Sort-Object { Get-Random })
+
+          $securePass = ConvertTo-SecureString $password -AsPlainText -Force
+
+          New-LocalUser -Name "RDP" -Password $securePass -AccountNeverExpires
+
+          Add-LocalGroupMember -Group "Administrators" -Member "RDP"
+
+          Add-LocalGroupMember -Group "Remote Desktop Users" -Member "RDP"
+
+          
+
+          echo "RDP_CREDS=User: RDP | Password: $password" >> $env:GITHUB_ENV
+
+          
+
+          if (-not (Get-LocalUser -Name "RDP")) {
+
+              Write-Error "User creation failed"
+
+              exit 1
+
+          }
+
+
+
+      - name: Install Tailscale
+
         run: |
-          sudo tailscaled > /tmp/tailscaled.log 2>&1 &
-          sleep 5
 
-      - name: Tailscale auth link ile bağlan
+          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
+
+          $installerPath = "$env:TEMP\tailscale.msi"
+
+          
+
+          Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
+
+          Start-Process msiexec.exe -ArgumentList "/i", "`"$installerPath`"", "/quiet", "/norestart" -Wait
+
+          Remove-Item $installerPath -Force
+
+
+
+      - name: Establish Tailscale Connection
+
         run: |
-          echo "=========================================="
-          echo " ASAGIDAKI LINKI AC VE TAILSCALE HESABINLA GIR"
-          echo "=========================================="
-          sudo tailscale up --hostname=vnc-runner --accept-routes --accept-dns=false --timeout=10m 2>&1 | tee /tmp/ts.log || true
-          echo "=========================================="
 
-      - name: Bağlantı bekle ve IP göster
+          # Bring up Tailscale with the provided auth key and set a unique hostname
+
+          & "$env:ProgramFiles\Tailscale\tailscale.exe" up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-runner-$env:GITHUB_RUN_ID
+
+          
+
+          # Wait for Tailscale to assign an IP
+
+          $tsIP = $null
+
+          $retries = 0
+
+          while (-not $tsIP -and $retries -lt 10) {
+
+              $tsIP = & "$env:ProgramFiles\Tailscale\tailscale.exe" ip -4
+
+              Start-Sleep -Seconds 5
+
+              $retries++
+
+          }
+
+          
+
+          if (-not $tsIP) {
+
+              Write-Error "Tailscale IP not assigned. Exiting."
+
+              exit 1
+
+          }
+
+          echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+
+      
+
+      - name: Verify RDP Accessibility
+
         run: |
-          for i in $(seq 1 60); do
-            IP=$(tailscale ip -4 2>/dev/null || true)
-            if [ -n "$IP" ]; then break; fi
-            sleep 5
-          done
-          if [ -z "$IP" ]; then echo "Tailscale baglanamadi! Linke tikladin mi?"; exit 1; fi
-          echo "=========================================="
-          echo " TAILSCALE IP: $IP"
-          echo " noVNC PORT : 6080"
-          echo " VNC SIFRE  : siksiken"
-          echo "=========================================="
 
-      - name: Masaüstü + noVNC + VNC kur
+          Write-Host "Tailscale IP: $env:TAILSCALE_IP"
+
+          
+
+          # Test connectivity using Test-NetConnection against the Tailscale IP on port 3389
+
+          $testResult = Test-NetConnection -ComputerName $env:TAILSCALE_IP -Port 3389
+
+          if (-not $testResult.TcpTestSucceeded) {
+
+              Write-Error "TCP connection to RDP port 3389 failed"
+
+              exit 1
+
+          }
+
+          Write-Host "TCP connectivity successful!"
+
+
+
+      - name: Maintain Connection
+
         run: |
-          sudo apt-get update -qq
-          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            xfce4 xfce4-goodies \
-            tigervnc-standalone-server tigervnc-common \
-            novnc websockify \
-            dbus-x11 x11-xserver-utils
 
-      - name: VNC şifresini ayarla
-        run: |
-          mkdir -p ~/.vnc
-          echo "siksiken" | vncpasswd -f > ~/.vnc/passwd
-          chmod 600 ~/.vnc/passwd
+          Write-Host "`n=== RDP ACCESS ==="
 
-      - name: VNC + noVNC başlat
-        run: |
-          # VNC server (display :1, port 5901)
-          vncserver :1 -geometry 1600x900 -depth 24 -localhost no -SecurityTypes VncAuth
+          Write-Host "Address: $env:TAILSCALE_IP"
 
-          # noVNC websockify (port 6080 -> 5901)
-          websockify --web=/usr/share/novnc/ 6080 localhost:5901 > /tmp/novnc.log 2>&1 &
+          Write-Host "Username: RDP"
 
-          sleep 5
-          echo "noVNC çalışıyor: http://<tailscale-ip>:6080/vnc.html"
+          Write-Host "Password: $(echo $env:RDP_CREDS)"
 
-      - name: Canlı tut (6 saat)
-        run: |
-          echo "HAZIR!"
-          echo "Tarayıcıdan: http://<TAILSCALE-IP>:6080/vnc.html"
-          echo "Şifre: siksiken"
-          sleep 21000
+          Write-Host "==================`n"
+
+          
+
+          # Keep runner active indefinitely (or until manually cancelled)
+
+          while ($true) {
+
+              Write-Host "[$(Get-Date)] RDP Active - Use Ctrl+C in workflow to terminate"
+
+              Start-Sleep -Seconds 300
+
+          }
+
