@@ -1,71 +1,80 @@
-name: Windows VNC via Tailscale
+name: Ubuntu noVNC via Tailscale
 
 on:
   workflow_dispatch:
 
 jobs:
   vnc:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     timeout-minutes: 360
 
     steps:
-      - name: Tailscale kur (winget)
-        shell: pwsh
+      - name: Runner bilgisi
         run: |
-          winget install --id Tailscale.Tailscale --silent --accept-source-agreements --accept-package-agreements
-          # PATH güncellemesi için yeni shell'e gerek yok, direkt exe yolu:
-          $ts = "C:\Program Files\Tailscale\tailscale.exe"
-          if (!(Test-Path $ts)) { Write-Error "Tailscale kurulamadı!" }
-          & $ts version
+          echo "IP: $(curl -s ifconfig.me)"
+          echo "Ülke: $(curl -s ipinfo.io/country)"
+          echo "Şehir: $(curl -s ipinfo.io/city)"
+
+      - name: Tailscale kur
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
 
       - name: Tailscale servisini başlat
-        shell: pwsh
         run: |
-          Start-Service Tailscale
-          Set-Service Tailscale -StartupType Automatic
-          Start-Sleep -Seconds 5
+          sudo tailscaled > /tmp/tailscaled.log 2>&1 &
+          sleep 5
 
-      - name: Tailscale'e auth link ile bağlan
-        shell: pwsh
+      - name: Tailscale auth link ile bağlan
         run: |
-          $ts = "C:\Program Files\Tailscale\tailscale.exe"
-          Write-Host "=========================================="
-          Write-Host " ASAGIDAKI LINKI AC VE TAILSCALE HESABINLA GIR"
-          Write-Host "=========================================="
-          # --qr yerine normal auth URL basar, log'da görünür
-          & $ts up --accept-routes --accept-dns=false --timeout=10m 2>&1 | Tee-Object -FilePath "$env:TEMP\ts.log"
-          Get-Content "$env:TEMP\ts.log"
-          Write-Host "=========================================="
+          echo "=========================================="
+          echo " ASAGIDAKI LINKI AC VE TAILSCALE HESABINLA GIR"
+          echo "=========================================="
+          sudo tailscale up --hostname=vnc-runner --accept-routes --accept-dns=false --timeout=10m 2>&1 | tee /tmp/ts.log || true
+          echo "=========================================="
 
-      - name: Baglanti bekle ve IP'yi goster
-        shell: pwsh
+      - name: Bağlantı bekle ve IP göster
         run: |
-          $ts = "C:\Program Files\Tailscale\tailscale.exe"
-          for ($i=0; $i -lt 60; $i++) {
-            $ip = & $ts ip -4 2>$null
-            if ($ip) { break }
-            Start-Sleep -Seconds 5
-          }
-          if (-not $ip) { Write-Error "Tailscale baglanamadi! Link'e tikladin mi?" }
-          Write-Host "=========================================="
-          Write-Host " TAILSCALE IP: $ip"
-          Write-Host " VNC PORT: 5900"
-          Write-Host " KULLANICI: siksiken"
-          Write-Host " SIFRE: siksiken"
-          Write-Host "=========================================="
+          for i in $(seq 1 60); do
+            IP=$(tailscale ip -4 2>/dev/null || true)
+            if [ -n "$IP" ]; then break; fi
+            sleep 5
+          done
+          if [ -z "$IP" ]; then echo "Tailscale baglanamadi! Linke tikladin mi?"; exit 1; fi
+          echo "=========================================="
+          echo " TAILSCALE IP: $IP"
+          echo " noVNC PORT : 6080"
+          echo " VNC SIFRE  : siksiken"
+          echo "=========================================="
 
-      - name: TightVNC kur ve baslat
-        shell: pwsh
+      - name: Masaüstü + noVNC + VNC kur
         run: |
-          $url = "https://www.tightvnc.com/download/2.8.81/tightvnc-2.8.81-gpl-setup-64bit.msi"
-          Invoke-WebRequest -Uri $url -OutFile "$env:TEMP\tightvnc.msi"
-          Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tightvnc.msi`" /quiet /norestart ADDLOCAL=Server SET_USEVNCAUTHENTICATION=1 VALUE_OF_USEVNCAUTHENTICATION=1 SET_PASSWORD=1 VALUE_OF_PASSWORD=siksiken SET_VIEWONLYPASSWORD=0 VALUE_OF_VIEWONLYPASSWORD=siksiken SET_ALLOWLOOPBACK=1 VALUE_OF_ALLOWLOOPBACK=1" -Wait
-          Start-Service tvnserver
-          Set-Service tvnserver -StartupType Automatic
-          New-NetFirewallRule -DisplayName "VNC" -Direction Inbound -Protocol TCP -LocalPort 5900 -Action Allow
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            xfce4 xfce4-goodies \
+            tigervnc-standalone-server tigervnc-common \
+            novnc websockify \
+            dbus-x11 x11-xserver-utils
 
-      - name: Canli tut (6 saat)
-        shell: pwsh
+      - name: VNC şifresini ayarla
         run: |
-          Write-Host "HAZIR! TightVNC Viewer ile baglan."
-          Start-Sleep -Seconds 21000
+          mkdir -p ~/.vnc
+          echo "siksiken" | vncpasswd -f > ~/.vnc/passwd
+          chmod 600 ~/.vnc/passwd
+
+      - name: VNC + noVNC başlat
+        run: |
+          # VNC server (display :1, port 5901)
+          vncserver :1 -geometry 1600x900 -depth 24 -localhost no -SecurityTypes VncAuth
+
+          # noVNC websockify (port 6080 -> 5901)
+          websockify --web=/usr/share/novnc/ 6080 localhost:5901 > /tmp/novnc.log 2>&1 &
+
+          sleep 5
+          echo "noVNC çalışıyor: http://<tailscale-ip>:6080/vnc.html"
+
+      - name: Canlı tut (6 saat)
+        run: |
+          echo "HAZIR!"
+          echo "Tarayıcıdan: http://<TAILSCALE-IP>:6080/vnc.html"
+          echo "Şifre: siksiken"
+          sleep 21000
