@@ -1,0 +1,55 @@
+name: Build LineageOS 19.1 for J7 Prime 2 (on7xreflte)
+
+on:
+  workflow_dispatch: # Elle tetiklemek için
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Maximize Build Space
+        uses: easimon/maximize-build-space@master
+        with:
+          root-reserve-mb: 10240
+          swap-size-mb: 10240
+          remove-dotnet: 'true'
+          remove-android: 'true'
+          remove-postgresql: 'true'
+          remove-firefox: 'true'
+          remove-code-spaces: 'true'
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential ccache curl flex g++-multilib gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev lib32readline-dev lib32z1-dev libelf-dev liblz4-tool libncurses5 libncurses5-dev libsdl1.2-dev libssl-devSamsung Galaxy J7 Prime 2 (`on7xreflte`) için **LineageOS 19.1 (Android 12)** tabanlı bu Custom ROM'u bilgisayar kullanmadan, **tamamen bulutta (GitHub Actions üzerinde)** adım adım nasıl derleyebileceğimizi planlayalım.
+
+GitHub Actions sunucuları yüksek RAM'e ve güçlü işlemcilere sahip olduğu için, telefonunuzdaki tarayıcıdan sadece komutları ve dosyaları yöneterek bu süreci yönetebilirsiniz.
+
+İşte adım adım ROM yapım süreci:
+
+---
+
+### Adım 1: GitHub Üzerinde "Manifest" (Workspace) Deposu Oluşturmak
+LineageOS gibi büyük kaynak kodları tek bir depoda durmaz, `repo` aracı ile onlarca farklı depodan (cihaz ağacı, çekirdek, vendor, Android iskeleti) birleştirilir.
+1. Tarayıcınızdan GitHub'a girip yeni bir boş depo oluşturun (Örn: `rom-builder`).
+2. Bu deponun içine bir `default.xml` (veya `lineage.xml`) manifest dosyası koyacağız. Bu dosya, GitHub Actions'ın hangi kaynakları indireceğini söyleyecek.
+
+### Adım 2: GitHub Actions Workflow Dosyası Hazırlamak (`build.yml`)
+Deponuzun içine `.github/workflows/build.yml` adında bir dosya oluşturup içine bulut derleme motorunu kuracağız. Bu dosya sırasıyla şu işlemleri yapacak:
+
+1. **Sistemi Hazırlama:** Ubuntu runner üzerine Java, `repo`, `git`, `python3` ve derleme için gerekli Linux paketlerini kurar.
+2. **LineageOS Kodlarını Çekme (`repo init` & `repo sync`):** LineageOS 19.1 ana kaynak kodlarını indirir.
+3. **Cihaz Ağaçlarını Yerine Koyma:** İndirilen ana kaynak kodlarının içine, demin bulduğumuz şu kritik depoları doğru klasör yollarına klonlar:
+   * `device/samsung/on7xreflte` (Exynos7870-Revived-Beta deposu)
+   * `device/samsung/universal7870-common` (Ortak Exynos 7870 ağacı)
+   * Çekirdek ve Vendor dosyaları.
+4. **Derlemeyi Başlatma (`lunch` & `mka`):**
+   ```bash
+   source build/envsetup.sh
+   export ALLOW_MISSING_DEPENDENCIES=true
+   lunch lineage_on7xreflte-userdebug
+   mka bacon
+   
