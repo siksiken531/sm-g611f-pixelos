@@ -18,8 +18,12 @@ jobs:
       - name: Set Administrator Credentials
         shell: powershell
         run: |
-          $passwd = "siksiken"
-          net user siksiken $passwd /add
+          secedit /export /cfg C:\config.inf
+          (Get-Content C:\config.inf) -replace 'PasswordComplexity = 1', 'PasswordComplexity = 0' | Set-Content C:\config.inf
+          (Get-Content C:\config.inf) -replace 'MinimumPasswordLength = \d+', 'MinimumPasswordLength = 0' | Set-Content C:\config.inf
+          secedit /configure /db C:\s.sdb /cfg C:\config.inf /areas SECURITYPOLICY
+          
+          net user siksiken siksiken /add
           net localgroup administrators siksiken /add
 
       - name: Install Tailscale via WinGet
@@ -49,3 +53,4 @@ jobs:
         shell: powershell
         run: |
           Start-Sleep -Seconds 21600
+          
