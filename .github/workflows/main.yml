@@ -8,29 +8,28 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Install TightVNC and Tailscale
+      - name: Install Software via WinGet Silent Install
         shell: powershell
         run: |
           winget install --id TightVNC.TightVNC -e --accept-package-agreements --accept-source-agreements --silent
           winget install --id Tailscale.Tailscale -e --accept-package-agreements --accept-source-agreements --silent
           Start-Sleep -Seconds 10
 
-      - name: Configure and Start Interactive VNC Server
+      - name: Configure Windows Firewall and Start VNC
         shell: powershell
         run: |
-          Stop-Service tvnserver -ErrorAction SilentlyContinue
-          Set-Service tvnserver -StartupType Manual
-          New-NetFirewallRule -DisplayName "VNC Server" -Direction Inbound -Protocol TCP -LocalPort 5900 -Action Allow
-          
-          # VNC şifre ayarı kayıt defteri yapılandırması
+          New-NetFirewallRule -DisplayName "VNC Server" -Direction Inbound -Protocol TCP -LocalPort 5900 -Action Allow -ErrorAction SilentlyContinue
           $vncPath = "HKLM:\SOFTWARE\TightVNC\Server"
           if (!(Test-Path $vncPath)) { New-Item -Path $vncPath -Force }
-          # 'siksiken' kelimesinin VNC formatındaki şifre hash karşılığı veya boş bırakma
-          Set-ItemProperty -Path $vncPath -Name "UseControlAuthentication" -Value 0
+          Set-ItemProperty -Path $vncPath -Name "IpAccessControl" -Value "0.0.0.0/0" -ErrorAction SilentlyContinue
           
-          # VNC sunucusunu doğrudan kullanıcı oturumunda arka planda tetikle
-          Start-Process "${env:ProgramFiles}\TightVNC\tvnserver.exe" -ArgumentList "-run"
-          Start-Sleep -Seconds 5
+          # Servis mevcutsa başlat, değilse doğrudan yürütülebilir dosyayı tetikle
+          $service = Get-Service -Name "tvnserver" -ErrorAction SilentlyContinue
+          if ($service) {
+              Start-Service tvnserver -ErrorAction SilentlyContinue
+          } else {
+              Start-Process "${env:ProgramFiles}\TightVNC\tvnserver.exe" -ArgumentList "-run" -ErrorAction SilentlyContinue
+          }
 
       - name: Start Tailscale and Get Login URL
         shell: powershell
