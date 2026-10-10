@@ -14,11 +14,17 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
+      - name: Set Administrator Credentials
+        shell: powershell
+        run: |
+          $passwd = "siksiken"
+          net user siksiken $passwd /add
+          net localgroup administrators siksiken /add
+
       - name: Install Tailscale via winget
         shell: powershell
         run: |
           winget install --id Tailscale.Tailscale -e --accept-package-agreements --accept-source-agreements
-          # Service'in aktif hale gelmesi için kısa bir bekleme
           Start-Sleep -Seconds 10
 
       - name: Start Tailscale and Get Login URL
@@ -34,10 +40,12 @@ jobs:
           $ip = & $tailscalePath ip -4
           Write-Host "=================================================="
           Write-Host "Tailscale IP adresiniz: $ip"
-          Write-Host "Kullanıcı adı: runneradmin"
+          Write-Host "Kullanıcı adı: siksiken"
+          Write-Host "Şifre: siksiken"
           Write-Host "=================================================="
 
       - name: Keep Runner Alive
         shell: powershell
         run: |
           Start-Sleep -Seconds 21600
+          
