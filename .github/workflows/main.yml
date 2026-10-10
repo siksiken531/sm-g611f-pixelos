@@ -1,4 +1,4 @@
-name: Tailscale Windows VNC
+name: Tailscale Windows RDP
 
 on: [workflow_dispatch]
 
@@ -8,33 +8,25 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Install Tailscale and VNC via WinGet
+      - name: Enable RDP and Configure Firewall
+        shell: powershell
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+
+      - name: Set Administrator Credentials
+        shell: powershell
+        run: |
+          $passwd = "siksiken"
+          net user siksiken $passwd /add
+          net localgroup administrators siksiken /add
+
+      - name: Install Tailscale via WinGet
         shell: powershell
         run: |
           winget install --id Tailscale.Tailscale -e --accept-package-agreements --accept-source-agreements --silent
-          winget install --id TightVNC.TightVNC -e --accept-package-agreements --accept-source-agreements --silent
           Start-Sleep -Seconds 10
-
-      - name: Configure Firewall and Start VNC
-        shell: powershell
-        run: |
-          New-NetFirewallRule -DisplayName "VNC Server" -Direction Inbound -Protocol TCP -LocalPort 5900 -Action Allow -ErrorAction SilentlyContinue
-          
-          # Alternatif VNC yürütülebilir dosya yolunu bul ve çalıştır
-          $vncPaths = @(
-              "${env:ProgramFiles}\TightVNC\tvnserver.exe",
-              "${env:ProgramFiles(x86)}\TightVNC\tvnserver.exe"
-          )
-          
-          $foundPath = $vncPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
-          
-          if ($foundPath) {
-              Start-Process $foundPath -ArgumentList "-run" -ErrorAction SilentlyContinue
-              Write-Host "VNC başlatıldı: $foundPath"
-          } else {
-              Write-Error "VNC yürütülebilir dosyası bulunamadı."
-              exit 1
-          }
 
       - name: Start Tailscale and Get Login URL
         shell: powershell
@@ -49,7 +41,8 @@ jobs:
           $ip = & $tailscalePath ip -4
           Write-Host "=================================================="
           Write-Host "Tailscale IP adresiniz: $ip"
-          Write-Host "VNC Portu: 5900"
+          Write-Host "Kullanıcı adı: siksiken"
+          Write-Host "Şifre: siksiken"
           Write-Host "=================================================="
 
       - name: Keep Runner Alive
