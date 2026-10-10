@@ -8,22 +8,12 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Disable WinGet Interactive Prompts & Install Software
+      - name: Install Software via WinGet Silent Install
         shell: powershell
         run: |
-          # WinGet kaynak ayarlarını ve sözleşmeleri otomatik onaylayacak şekilde yapılandır
-          winget settings --enable InstallerHashOverride
-          
-          # TightVNC Kurulumu (msstore kaynağını atlayıp doğrudan .msi ile garantili kurulum)
-          $vncUrl = "https://www.tightvnc.com/download/2.8.67/tightvnc-2.8.67-gpl-setup-64bit.msi"
-          Invoke-WebRequest -Uri $vncUrl -OutFile "tightvnc.msi"
-          Start-Process msiexec.exe -ArgumentList '/i tightvnc.msi /quiet /norestart SET_PASSWORD=1 PASSWORD=siksiken ADMIN_PASSWORD=siksiken' -Wait
-
-          # Tailscale Kurulumu
-          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-release.msi"
-          Invoke-WebRequest -Uri $tsUrl -OutFile "tailscale.msi"
-          Start-Process msiexec.exe -ArgumentList '/i tailscale.msi /quiet /norestart' -Wait
-          Start-Sleep -Seconds 5
+          winget install --id TightVNC.TightVNC -e --accept-package-agreements --accept-source-agreements --silent
+          winget install --id Tailscale.Tailscale -e --accept-package-agreements --accept-source-agreements --silent
+          Start-Sleep -Seconds 10
 
       - name: Start Tailscale and Get Login URL
         shell: powershell
@@ -31,14 +21,14 @@ jobs:
           $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
           & $tailscalePath up
         
-      - name: Get Tailscale IP and VNC Info
+      - name: Get Tailscale IP Info
         shell: powershell
         run: |
           $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
           $ip = & $tailscalePath ip -4
           Write-Host "=================================================="
           Write-Host "Tailscale IP adresiniz: $ip"
-          Write-Host "VNC Şifresi: siksiken"
+          Write-Host "VNC Portu: 5900"
           Write-Host "=================================================="
 
       - name: Keep Runner Alive
