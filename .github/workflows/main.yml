@@ -17,9 +17,10 @@ jobs:
       - name: Set Administrator Credentials
         shell: powershell
         run: |
-          $passwd = "siksiken"
-          net user siksiken $passwd /add
-          net localgroup administrators siksiken /add
+          $passwd = "Siksiken123!_."
+          net user runneradmin $passwd
+          Write-Host "Kullanıcı adı: runneradmin"
+          Write-Host "Şifre: Siksiken123!_."
 
       - name: Install Tailscale via winget
         shell: powershell
@@ -40,8 +41,8 @@ jobs:
           $ip = & $tailscalePath ip -4
           Write-Host "=================================================="
           Write-Host "Tailscale IP adresiniz: $ip"
-          Write-Host "Kullanıcı adı: siksiken"
-          Write-Host "Şifre: siksiken"
+          Write-Host "Kullanıcı adı: runneradmin"
+          Write-Host "Şifre: Siksiken123!_."
           Write-Host "=================================================="
 
       - name: Keep Runner Alive
