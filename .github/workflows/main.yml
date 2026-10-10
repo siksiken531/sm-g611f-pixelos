@@ -8,30 +8,22 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Install TightVNC via winget
+      - name: Disable WinGet Interactive Prompts & Install Software
         shell: powershell
         run: |
-          winget install --id TightVNC.TightVNC -e --accept-package-agreements --accept-source-agreements
-          Start-Sleep -Seconds 5
-
-      - name: Configure and Start VNC Server
-        shell: powershell
-        run: |
-          # VNC servis şifresini ayarlama (TightVNC kayıt defteri ayarları)
-          $vncPath = "HKLM:\SOFTWARE\TightVNC\Server"
-          if (!(Test-Path $vncPath)) { New-Item -Path $vncPath -Force }
-          # Şifre ayarları (TightVNC varsayılan şifre tanımlama mekanizması)
-          Set-ItemProperty -Path $vncPath -Name "Password" -Value ([byte[]](0x12,0x34,0x56,0x78,0x90,0xab,0xcd,0xef)) # Varsayılan örnek şifre veya boş bırakılabilir
+          # WinGet kaynak ayarlarını ve sözleşmeleri otomatik onaylayacak şekilde yapılandır
+          winget settings --enable InstallerHashOverride
           
-          # TightVNC servis başlatma
-          Start-Service tvnserver
-          Write-Host "VNC Sunucusu başlatıldı!"
+          # TightVNC Kurulumu (msstore kaynağını atlayıp doğrudan .msi ile garantili kurulum)
+          $vncUrl = "https://www.tightvnc.com/download/2.8.67/tightvnc-2.8.67-gpl-setup-64bit.msi"
+          Invoke-WebRequest -Uri $vncUrl -OutFile "tightvnc.msi"
+          Start-Process msiexec.exe -ArgumentList '/i tightvnc.msi /quiet /norestart SET_PASSWORD=1 PASSWORD=siksiken ADMIN_PASSWORD=siksiken' -Wait
 
-      - name: Install Tailscale via winget
-        shell: powershell
-        run: |
-          winget install --id Tailscale.Tailscale -e --accept-package-agreements --accept-source-agreements
-          Start-Sleep -Seconds 10
+          # Tailscale Kurulumu
+          $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-release.msi"
+          Invoke-WebRequest -Uri $tsUrl -OutFile "tailscale.msi"
+          Start-Process msiexec.exe -ArgumentList '/i tailscale.msi /quiet /norestart' -Wait
+          Start-Sleep -Seconds 5
 
       - name: Start Tailscale and Get Login URL
         shell: powershell
@@ -46,7 +38,7 @@ jobs:
           $ip = & $tailscalePath ip -4
           Write-Host "=================================================="
           Write-Host "Tailscale IP adresiniz: $ip"
-          Write-Host "VNC Portu: 5900 (veya :1 / 5901)"
+          Write-Host "VNC Şifresi: siksiken"
           Write-Host "=================================================="
 
       - name: Keep Runner Alive
