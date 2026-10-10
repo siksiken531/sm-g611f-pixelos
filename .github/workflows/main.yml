@@ -1,0 +1,35 @@
+name: Tailscale Windows RDP
+
+on: [workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Enable RDP
+        run: |
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
+
+      - name: Start Tailscale and Get Login URL
+        uses: tailscale/github-action@v2
+        with:
+          # Auth key kullanmıyoruz, böylece loglarda ekrana tıklayıp giriş yapabileceğiniz login linki çıkar
+          args: --advertise-exit-node
+
+      - name: Get RDP and IP Info
+        shell: pwsh
+        run: |
+          $ip = (tailscale ip -4)
+          Write-Host "=================================================="
+          Write-Host "Tailscale IP adresiniz: $ip"
+          Write-Host "Kullanıcı adı: runneradmin"
+          Write-Host "=================================================="
+
+      - name: Keep Runner Alive
+        run: |
+          Start-Sleep -Seconds 21600
+          
