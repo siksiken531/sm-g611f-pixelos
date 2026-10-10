@@ -1,4 +1,4 @@
-name: Tailscale Windows RDP
+name: Tailscale Windows VNC
 
 on: [workflow_dispatch]
 
@@ -8,19 +8,24 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Enable RDP
-        run: |
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
-          Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-
-      - name: Set Administrator Credentials
+      - name: Install TightVNC via winget
         shell: powershell
         run: |
-          $passwd = "Siksiken123!_."
-          net user runneradmin $passwd
-          Write-Host "Kullanıcı adı: runneradmin"
-          Write-Host "Şifre: Siksiken123!_."
+          winget install --id TightVNC.TightVNC -e --accept-package-agreements --accept-source-agreements
+          Start-Sleep -Seconds 5
+
+      - name: Configure and Start VNC Server
+        shell: powershell
+        run: |
+          # VNC servis şifresini ayarlama (TightVNC kayıt defteri ayarları)
+          $vncPath = "HKLM:\SOFTWARE\TightVNC\Server"
+          if (!(Test-Path $vncPath)) { New-Item -Path $vncPath -Force }
+          # Şifre ayarları (TightVNC varsayılan şifre tanımlama mekanizması)
+          Set-ItemProperty -Path $vncPath -Name "Password" -Value ([byte[]](0x12,0x34,0x56,0x78,0x90,0xab,0xcd,0xef)) # Varsayılan örnek şifre veya boş bırakılabilir
+          
+          # TightVNC servis başlatma
+          Start-Service tvnserver
+          Write-Host "VNC Sunucusu başlatıldı!"
 
       - name: Install Tailscale via winget
         shell: powershell
@@ -34,15 +39,14 @@ jobs:
           $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
           & $tailscalePath up
         
-      - name: Get RDP and IP Info
+      - name: Get Tailscale IP and VNC Info
         shell: powershell
         run: |
           $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
           $ip = & $tailscalePath ip -4
           Write-Host "=================================================="
           Write-Host "Tailscale IP adresiniz: $ip"
-          Write-Host "Kullanıcı adı: runneradmin"
-          Write-Host "Şifre: Siksiken123!_."
+          Write-Host "VNC Portu: 5900 (veya :1 / 5901)"
           Write-Host "=================================================="
 
       - name: Keep Runner Alive
