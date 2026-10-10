@@ -8,27 +8,32 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Install Software via WinGet Silent Install
+      - name: Install Tailscale and VNC via WinGet
         shell: powershell
         run: |
-          winget install --id TightVNC.TightVNC -e --accept-package-agreements --accept-source-agreements --silent
           winget install --id Tailscale.Tailscale -e --accept-package-agreements --accept-source-agreements --silent
+          winget install --id TightVNC.TightVNC -e --accept-package-agreements --accept-source-agreements --silent
           Start-Sleep -Seconds 10
 
-      - name: Configure Windows Firewall and Start VNC
+      - name: Configure Firewall and Start VNC
         shell: powershell
         run: |
           New-NetFirewallRule -DisplayName "VNC Server" -Direction Inbound -Protocol TCP -LocalPort 5900 -Action Allow -ErrorAction SilentlyContinue
-          $vncPath = "HKLM:\SOFTWARE\TightVNC\Server"
-          if (!(Test-Path $vncPath)) { New-Item -Path $vncPath -Force }
-          Set-ItemProperty -Path $vncPath -Name "IpAccessControl" -Value "0.0.0.0/0" -ErrorAction SilentlyContinue
           
-          # Servis mevcutsa başlat, değilse doğrudan yürütülebilir dosyayı tetikle
-          $service = Get-Service -Name "tvnserver" -ErrorAction SilentlyContinue
-          if ($service) {
-              Start-Service tvnserver -ErrorAction SilentlyContinue
+          # Alternatif VNC yürütülebilir dosya yolunu bul ve çalıştır
+          $vncPaths = @(
+              "${env:ProgramFiles}\TightVNC\tvnserver.exe",
+              "${env:ProgramFiles(x86)}\TightVNC\tvnserver.exe"
+          )
+          
+          $foundPath = $vncPaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+          
+          if ($foundPath) {
+              Start-Process $foundPath -ArgumentList "-run" -ErrorAction SilentlyContinue
+              Write-Host "VNC başlatıldı: $foundPath"
           } else {
-              Start-Process "${env:ProgramFiles}\TightVNC\tvnserver.exe" -ArgumentList "-run" -ErrorAction SilentlyContinue
+              Write-Error "VNC yürütülebilir dosyası bulunamadı."
+              exit 1
           }
 
       - name: Start Tailscale and Get Login URL
@@ -51,4 +56,3 @@ jobs:
         shell: powershell
         run: |
           Start-Sleep -Seconds 21600
-          
