@@ -14,22 +14,31 @@ jobs:
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
 
-      - name: Start Tailscale and Get Login URL
-        uses: tailscale/github-action@v2
-        with:
-          # Auth key kullanmıyoruz, böylece loglarda ekrana tıklayıp giriş yapabileceğiniz login linki çıkar
-          args: --advertise-exit-node
-
-      - name: Get RDP and IP Info
-        shell: pwsh
+      - name: Download and Install Tailscale
+        shell: powershell
         run: |
-          $ip = (tailscale ip -4)
+          Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-unsigned.msi" -OutFile "tailscale-setup.msi"
+          Start-Process msiexec.exe -ArgumentList '/i tailscale-setup.msi /quiet /norestart' -Wait
+          Start-Sleep -Seconds 5
+
+      - name: Start Tailscale and Get Login URL
+        shell: powershell
+        run: |
+          $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
+          & $tailscalePath up
+        
+      - name: Get RDP and IP Info
+        shell: powershell
+        run: |
+          $tailscalePath = "${env:ProgramFiles}\Tailscale\tailscale.exe"
+          $ip = & $tailscalePath ip -4
           Write-Host "=================================================="
           Write-Host "Tailscale IP adresiniz: $ip"
           Write-Host "Kullanıcı adı: runneradmin"
           Write-Host "=================================================="
 
       - name: Keep Runner Alive
+        shell: powershell
         run: |
           Start-Sleep -Seconds 21600
           
